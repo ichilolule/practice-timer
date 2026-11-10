@@ -30,7 +30,7 @@ p { line-height: 1.5; }
 #task-form { display: grid; gap: 12px; }
 #task-form label { display: grid; gap: 5px; }
 #task-form input, #task-form textarea, #task-form select, .inline-form input, .record-row input, .record-row select { padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
-#quick-task-title { flex: 1 1 240px; min-width: 0; }
+#quick-task-title, #timer-quick-task-title { flex: 1 1 240px; min-width: 0; }
 .category-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .category-fields select { width: 100%; }
 dialog { width: min(600px, calc(100% - 30px)); max-height: min(85vh, 800px); overflow: auto; padding: 22px; border: 1px solid #abb1bd; border-radius: 12px; color: inherit; background: white; box-shadow: 0 12px 40px #24283229; }

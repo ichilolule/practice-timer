@@ -233,6 +233,37 @@ test('既存タスクを保ち、完了済みへ退避して戻せる', async ()
   assert.equal(reopened.elements.get('quick-task-title').value, '');
 });
 
+test('タイマー画面でEnterからタスクを即追加し、未選択の回だけ自動で選ぶ', async () => {
+  const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+  assert.match(html, /<form id="timer-quick-task-form"[\s\S]*?<button type="submit">＋追加<\/button>/);
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
+  })]]);
+  const { elements } = mount(storage);
+  elements.get('timer-quick-task-title').value = 'あとで描く';
+  await elements.get('timer-quick-task-form').trigger('submit');
+  let saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.tasks[0].title, 'あとで描く');
+  assert.equal(saved.selectedTaskId, null);
+  assert.equal(elements.get('timer-quick-task-title').value, '');
+
+  await elements.get('main-action').trigger('click');
+  elements.get('timer-quick-task-title').value = '今から描く';
+  await elements.get('timer-quick-task-form').trigger('submit');
+  saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.selectedTaskId, saved.tasks[1].id);
+  assert.equal(elements.get('active-task-name').textContent, '今から描く');
+  assert.equal(elements.get('choose-task').disabled, true);
+
+  elements.get('timer-quick-task-title').value = '次に描く';
+  await elements.get('timer-quick-task-form').trigger('submit');
+  saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.tasks[2].title, '次に描く');
+  assert.equal(saved.selectedTaskId, saved.tasks[1].id);
+  assert.equal(elements.get('timer-quick-task-title').value, '');
+  await elements.get('end').trigger('click');
+});
+
 test('タイマー画面から二段階の加算先で追加し、この回に選べる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
@@ -249,7 +280,7 @@ test('タイマー画面から二段階の加算先で追加し、この回に�
 
   await elements.get('nav-timer').trigger('click');
   await elements.get('main-action').trigger('click');
-  await elements.get('timer-add-task').trigger('click');
+  await elements.get('timer-task-details-add').trigger('click');
   assert.equal(elements.get('task-dialog').open, true);
   elements.get('task-title').value = '手の練習';
   elements.get('task-first-step').value = '指を1本描く';
@@ -263,7 +294,7 @@ test('タイマー画面から二段階の加算先で追加し、この回に�
   assert.equal(elements.get('choose-task').disabled, true);
   assert.equal(elements.get('active-task-name').textContent, '手の練習');
 
-  await elements.get('timer-add-task').trigger('click');
+  await elements.get('timer-task-details-add').trigger('click');
   elements.get('task-title').value = '人体全体の練習';
   elements.get('task-group').value = group.id;
   await elements.get('task-group').trigger('change');

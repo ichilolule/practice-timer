@@ -285,6 +285,19 @@ function saveTask(selectAfter) {
   if (!$('timer-view').hidden) $('status').textContent = message;
 }
 
+function addQuickTask(title, selectAfter = false) {
+  const task = { id: newId(), title, firstStep: '', targetId: null, completedAt: null };
+  tasks.push(task);
+  if (selectAfter && run && !selectedTaskId) selectedTaskId = task.id;
+  persist();
+  renderTasks();
+  renderTaskChoice();
+  const message = selectedTaskId === task.id
+    ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
+  $('task-status').textContent = message;
+  if (!$('timer-view').hidden) $('status').textContent = message;
+}
+
 function taskRow(task, completed) {
   const item = document.createElement('li');
   const title = document.createElement('strong');
@@ -646,7 +659,15 @@ $('choose-task').addEventListener('click', () => {
   renderTaskPicker();
   $('task-picker-dialog').showModal();
 });
-$('timer-add-task').addEventListener('click', () => openTaskEditor(null, true));
+$('timer-quick-task-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const input = $('timer-quick-task-title');
+  const title = input.value.trim();
+  if (!title) return;
+  addQuickTask(title, true);
+  input.value = '';
+});
+$('timer-task-details-add').addEventListener('click', () => openTaskEditor(null, true));
 $('task-picker-add').addEventListener('click', () => {
   $('task-picker-dialog').close();
   openTaskEditor(null, true);
@@ -656,14 +677,11 @@ $('task-details-add').addEventListener('click', () => openTaskEditor());
 $('task-group').addEventListener('change', () => renderTaskChildren());
 $('quick-task-form').addEventListener('submit', (event) => {
   event.preventDefault();
-  const title = $('quick-task-title').value.trim();
+  const input = $('quick-task-title');
+  const title = input.value.trim();
   if (!title) return;
-  tasks.push({ id: newId(), title, firstStep: '', targetId: null, completedAt: null });
-  $('quick-task-title').value = '';
-  persist();
-  renderTasks();
-  renderTaskChoice();
-  $('task-status').textContent = 'タスクを追加しました。';
+  addQuickTask(title);
+  input.value = '';
 });
 $('task-form').addEventListener('submit', (event) => {
   event.preventDefault();

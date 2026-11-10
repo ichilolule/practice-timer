@@ -40,8 +40,12 @@
         <p id="active-task-hint" class="subtle">開始後に選んでも、選ぶ前の作業時間を含めます。</p>
         <div class="task-actions">
           <button id="choose-task" type="button">タスクを選ぶ</button>
-          <button id="timer-add-task" type="button">＋追加</button>
         </div>
+        <form id="timer-quick-task-form" class="inline-form">
+          <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="やりたいことを入力" aria-label="新しいタスクのやりたいこと" required>
+          <button type="submit">＋追加</button>
+        </form>
+        <button id="timer-task-details-add" type="button">詳細を入力して追加</button>
       </div>
       </div>
       </div>
