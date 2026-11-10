@@ -1,16 +1,19 @@
 :root { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif; color: #242832; background: #f4f5f7; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; border: 1px solid #abb1bd; border-radius: 8px; background: white; color: inherit; padding: 9px 12px; }
 button:hover:not(:disabled) { background: #e9edf5; }
 button:disabled { opacity: .45; cursor: default; }
-.app { width: min(100%, 740px); min-height: min(100vh, 740px); margin: 0 auto; padding: 20px; background: white; }
+.app { width: min(100%, 1000px); min-height: min(100vh, 1000px); margin: 0 auto; padding: 20px; background: white; }
 header, .controls, .step-controls { display: flex; align-items: center; gap: 8px; }
 header { justify-content: space-between; }
 h1 { font-size: 1.2rem; margin: 0; }
 .beta { display: inline-block; margin-left: 5px; padding: 2px 5px; border: 1px solid #9da6b3; border-radius: 4px; color: #626a77; font-size: .65rem; font-weight: 500; vertical-align: middle; }
 h2 { font-size: 1rem; margin: 30px 0 12px; }
+#primary-nav { display: flex; gap: 8px; margin-top: 18px; border-bottom: 1px solid #dde1e8; padding-bottom: 10px; }
+#primary-nav [aria-current="page"] { background: #e3edff; border-color: #88a6d9; font-weight: 700; }
+.timer-layout { display: grid; gap: 25px; }
 p { line-height: 1.5; }
 .phase { text-align: center; font-size: 1.4rem; margin: 46px 0 0; }
 #clock { font-variant-numeric: tabular-nums; font-size: clamp(4rem, 18vw, 8rem); line-height: 1.2; text-align: center; margin: 8px 0; }
@@ -23,6 +26,26 @@ p { line-height: 1.5; }
 #flow, #step-list { padding-left: 25px; }
 #flow li { padding: 5px 0; }
 #flow li.active { font-weight: 700; }
+#active-task-panel { margin-top: 28px; padding: 15px; border: 1px solid #dde1e8; border-radius: 10px; }
+#active-task-panel label { display: block; font-weight: 700; margin-bottom: 7px; }
+#active-task { width: 100%; padding: 8px; }
+#task-form { display: grid; gap: 12px; max-width: 640px; }
+#task-form label { display: grid; gap: 5px; }
+#task-form input, #task-form textarea, #task-form select, .inline-form input, .record-row input, .record-row select { padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
+.item-list { padding-left: 20px; }
+.item-list li { padding: 12px 0; border-bottom: 1px solid #dde1e8; }
+.item-list p { margin: 5px 0; }
+.item-list button, .group-card button { margin-right: 5px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.group-card { padding: 12px; margin: 12px 0; border: 1px solid #dde1e8; border-radius: 10px; }
+.group-card h3 { margin: 0; font-size: 1rem; }
+.group-card p { margin: 5px 0; }
+.group-card ul { padding-left: 20px; }
+.group-card li { padding: 4px 0; }
+.record-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 0; border-bottom: 1px solid #dde1e8; }
+.record-row input { flex: 1 1 230px; }
+.import-label { display: block; margin: 15px 0; }
+.import-label input { display: block; margin-top: 5px; }
 #step-list li { padding: 10px 0; border-bottom: 1px solid #dde1e8; }
 .step-row { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
 .step-row label { display: grid; gap: 3px; font-size: .9rem; }
@@ -32,4 +55,5 @@ p { line-height: 1.5; }
 .settings-actions { justify-content: flex-start; }
 #settings-error { color: #a32222; min-height: 1.5em; }
 [hidden] { display: none !important; }
-@media (max-width: 440px) { .app { padding: 15px; } .phase { margin-top: 32px; } .step-controls { width: 100%; } }
+@media (min-width: 800px) and (min-aspect-ratio: 6/5) { .timer-layout { grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); } }
+@media (max-width: 440px) { .app { padding: 15px; } .phase { margin-top: 32px; } .step-controls { width: 100%; } #primary-nav { flex-wrap: wrap; } }
