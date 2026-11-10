@@ -2,7 +2,7 @@
 'use strict';
 
 const { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } = globalThis.TimerCore;
-const { targetLabel, summarize, assignSession, clearTargets } = globalThis.PracticeData;
+const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodBuckets } = globalThis.PracticeData;
 
 const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
@@ -17,6 +17,9 @@ let sessions = [];
 let selectedTaskId = null;
 let editingTaskId = null;
 let taskEditorSelectAfter = false;
+let periodKind = 'day';
+let periodAnchor = Date.now();
+let editingRecordId = null;
 let audioContext = null;
 let lastSaved = 0;
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -33,8 +36,10 @@ function load() {
     run = restoreRun(saved.run);
     if (run) totalWorkMs = run.totalWorkMs;
     if (totalWorkMs > (run?.sessionWorkMs || 0)) {
-      sessions.push({ id: newId(), endedAt: Date.now(), workMs: totalWorkMs - (run?.sessionWorkMs || 0),
-        taskId: null, taskTitle: '以前の累計', targetId: null, reviewTargetId: null, note: '' });
+      const id = newId();
+      sessions.push({ id, recordGroupId: id, startedAt: null, endedAt: Date.now(),
+        workMs: totalWorkMs - (run?.sessionWorkMs || 0),
+        taskId: null, taskTitle: '以前の累計', targetId: null });
     }
   } catch {
     $('status').textContent = '保存データを読めませんでした。設定を確認してください。';
@@ -78,16 +83,6 @@ function appendOption(select, value, label) {
   option.value = value;
   option.textContent = label;
   select.append(option);
-}
-
-function appendTargetOptions(select, selected = '', emptyLabel = '未分類') {
-  select.replaceChildren();
-  appendOption(select, '', emptyLabel);
-  for (const group of groups) {
-    appendOption(select, group.id, group.title);
-    for (const child of group.children) appendOption(select, child.id, `${group.title} → ${child.title}`);
-  }
-  select.value = selected || '';
 }
 
 function renderTaskChoice() {
@@ -393,10 +388,104 @@ function removeGroup(group, child = null) {
   renderTaskChoice();
 }
 
+function dateLabel(timestamp) {
+  return new Date(timestamp).toLocaleString('ja-JP', {
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function dateInputValue(timestamp) {
+  const date = new Date(timestamp);
+  return new Date(timestamp - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+}
+
+function periodLabel(bounds) {
+  const start = new Date(bounds.start);
+  const end = new Date(bounds.end - 1);
+  if (periodKind === 'year') return `${start.getFullYear()}年`;
+  if (periodKind === 'month') return `${start.getFullYear()}年${start.getMonth() + 1}月`;
+  if (periodKind === 'week') return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
+  return start.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' });
+}
+
+function movePeriod(direction) {
+  const next = new Date(periodAnchor);
+  next.setHours(12, 0, 0, 0);
+  if (periodKind === 'year') { next.setMonth(0, 1); next.setFullYear(next.getFullYear() + direction); }
+  else if (periodKind === 'month') { next.setDate(1); next.setMonth(next.getMonth() + direction); }
+  else next.setDate(next.getDate() + direction * (periodKind === 'week' ? 7 : 1));
+  periodAnchor = next.getTime();
+  renderGrowth();
+}
+
+function recalculateTotal() {
+  const recorded = sessions.reduce((sum, session) => sum + session.workMs, 0);
+  totalWorkMs = recorded + (run?.sessionWorkMs || 0);
+  if (run) run.totalWorkMs = totalWorkMs;
+}
+
 function renderGrowth() {
+  const bounds = periodBounds(periodKind, periodAnchor);
+  const periodSessions = sessions.map((session) => ({ ...session,
+    workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
+  const periodMs = periodSessions.reduce((sum, session) => sum + session.workMs, 0);
+  $('period-label').textContent = periodLabel(bounds);
+  for (const kind of ['day', 'week', 'month', 'year']) {
+    $('period-' + kind).setAttribute('aria-pressed', String(kind === periodKind));
+  }
+  $('growth-total').textContent = `この期間 ${timeText(periodMs)}｜全期間 ${timeText(run?.totalWorkMs ?? totalWorkMs)}`;
+  const chart = $('period-chart');
+  chart.replaceChildren();
+  chart.hidden = periodKind === 'day';
+  const buckets = periodBuckets(periodKind, periodAnchor, sessions);
+  const largest = Math.max(1, ...buckets.map((bucket) => bucket.workMs));
+  for (const bucket of buckets) {
+    const date = new Date(bucket.start);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'period-bar';
+    const fill = document.createElement('div');
+    fill.className = 'period-bar-fill';
+    fill.style.height = `${bucket.workMs / largest * 100}%`;
+    const label = document.createElement('small');
+    label.textContent = periodKind === 'year' ? `${date.getMonth() + 1}月`
+      : periodKind === 'week' ? `${date.getMonth() + 1}/${date.getDate()}` : String(date.getDate());
+    item.setAttribute('aria-label', `${label.textContent} ${timeText(bucket.workMs)}`);
+    item.title = `${label.textContent} ${timeText(bucket.workMs)}`;
+    item.addEventListener('click', () => {
+      date.setHours(12, 0, 0, 0);
+      periodAnchor = date.getTime();
+      periodKind = periodKind === 'year' ? 'month' : 'day';
+      renderGrowth();
+    });
+    item.append(fill, label);
+    chart.append(item);
+  }
+  const periodSummary = summarize(groups, periodSessions);
+  const breakdown = $('period-group-list');
+  breakdown.replaceChildren();
+  const unclassifiedMs = periodSummary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
+  for (const group of periodSummary.groups.filter((item) => item.totalMs > 0)) {
+    const row = document.createElement('p');
+    const children = group.children.filter((item) => item.totalMs > 0)
+      .map((item) => `${item.title} ${timeText(item.totalMs)}`).join('、');
+    row.textContent = `${group.title} ${timeText(group.totalMs)}${children ? `（${children}）` : ''}`;
+    breakdown.append(row);
+  }
+  if (unclassifiedMs > 0) {
+    const row = document.createElement('p');
+    row.textContent = `加算先なし ${timeText(unclassifiedMs)}`;
+    breakdown.append(row);
+  }
+  if (!breakdown.children.length) {
+    const empty = document.createElement('p');
+    empty.textContent = 'この期間の記録はありません。';
+    breakdown.append(empty);
+  }
+  $('day-records').hidden = periodKind !== 'day';
+  if (periodKind === 'day') renderDayRecords(bounds);
+
   const summary = summarize(groups, sessions);
-  const unclassifiedMs = summary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
-  $('growth-total').textContent = `作業時間の累計 ${timeText(run?.totalWorkMs ?? totalWorkMs)}｜未分類 ${timeText(unclassifiedMs)}`;
   const groupList = $('group-list');
   groupList.replaceChildren();
   if (!groups.length) {
@@ -452,68 +541,117 @@ function renderGrowth() {
     groupList.append(card);
   }
 
-  const unclassifiedList = $('unclassified-list');
-  unclassifiedList.replaceChildren();
-  if (!summary.unclassified.length) {
-    const empty = document.createElement('p');
-    empty.textContent = '未分類の記録はありません。';
-    unclassifiedList.append(empty);
-  }
-  for (const session of summary.unclassified.slice().reverse()) {
-    const row = document.createElement('div');
-    row.className = 'record-row';
-    const label = document.createElement('span');
-    label.textContent = `${new Date(session.endedAt).toLocaleDateString('ja-JP')}｜${timeText(session.workMs)}｜${session.taskTitle || 'タスク未選択'}`;
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', '割り当てるタスク');
-    appendOption(select, '', '割り当てるタスクを選択');
-    for (const task of tasks) {
-      if (targetLabel(groups, task.targetId)) appendOption(select, task.id, task.title);
-    }
-    const assign = rowButton('割り当て', '未分類の時間をタスクへ割り当て', () => {
-      const task = tasks.find((item) => item.id === select.value);
-      if (!assignSession(session, task, groups)) {
-        $('growth-status').textContent = '加算先があるタスクを選んでください。';
-        return;
-      }
-      persist();
-      renderGrowth();
-      $('growth-status').textContent = '時間を割り当てました。';
-    });
-    row.append(label, select, assign);
-    unclassifiedList.append(row);
-  }
+}
 
-  const history = $('session-list');
-  history.replaceChildren();
-  for (const session of sessions.slice(-20).reverse()) {
-    const card = document.createElement('article');
-    card.className = 'record-row';
+function renderDayRecords(bounds) {
+  const list = $('record-list');
+  list.replaceChildren();
+  const unclassifiedOnly = $('unclassified-filter').checked;
+  const records = sessions.filter((session) => workInRange(session, bounds.start, bounds.end) > 0 &&
+    (!unclassifiedOnly || !targetLabel(groups, session.targetId)))
+    .sort((a, b) => (a.startedAt ?? a.endedAt) - (b.startedAt ?? b.endedAt));
+  $('day-record-count').textContent = `(${records.length})`;
+  for (const session of records) {
+    const row = document.createElement('article');
+    row.className = 'record-row';
     const heading = document.createElement('strong');
-    heading.textContent = `${new Date(session.endedAt).toLocaleDateString('ja-JP')}｜${timeText(session.workMs)}｜${session.taskTitle || 'タスク未選択'}`;
-    const note = document.createElement('input');
-    note.type = 'text';
-    note.maxLength = 500;
-    note.value = session.note || '';
-    note.placeholder = '気になったことをひとこと（任意）';
-    note.setAttribute('aria-label', '振り返りメモ');
-    const tag = document.createElement('select');
-    tag.setAttribute('aria-label', '気になった項目');
-    appendTargetOptions(tag, session.reviewTargetId, '気になった項目（任意）');
-    const save = rowButton('メモを保存', '振り返りメモを保存', () => {
-      session.note = note.value.trim();
-      session.reviewTargetId = tag.value || null;
-      persist();
-      $('growth-status').textContent = '振り返りを保存しました。';
-    });
-    card.append(heading, tag, note, save);
-    history.append(card);
+    const workMs = workInRange(session, bounds.start, bounds.end);
+    heading.textContent = `${session.startedAt == null ? '開始時刻なし' : dateLabel(session.startedAt)} ～ ${dateLabel(session.endedAt)}｜${timeText(workMs)}${workMs < session.workMs ? '（この日）' : ''}`;
+    const detail = document.createElement('p');
+    detail.textContent = `${session.taskTitle || 'タスク未選択'}｜${targetLabel(groups, session.targetId) || '加算先なし'}`;
+    row.append(heading, detail,
+      rowButton('修正・削除', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session)));
+    list.append(row);
   }
-  if (!sessions.length) {
+  if (!records.length) {
     const empty = document.createElement('p');
-    empty.textContent = '計測記録はまだありません。';
-    history.append(empty);
+    empty.textContent = unclassifiedOnly ? '加算先のない記録はありません。' : 'この日の記録はありません。';
+    list.append(empty);
   }
+}
+
+function renderRecordChildren(selected = '') {
+  const group = groups.find((item) => item.id === $('record-group').value);
+  const select = $('record-child');
+  select.replaceChildren();
+  appendOption(select, '', group ? '小分類なし（大分類へ加算）' : '大分類を先に選択');
+  for (const child of group?.children || []) appendOption(select, child.id, child.title);
+  select.value = group?.children.some((child) => child.id === selected) ? selected : '';
+  select.disabled = !group || !group.children.length;
+}
+
+function setRecordTarget(targetId) {
+  const { groupId, childId } = taskTargetParts(targetId);
+  $('record-group').replaceChildren();
+  appendOption($('record-group'), '', '未分類');
+  for (const group of groups) appendOption($('record-group'), group.id, group.title);
+  $('record-group').value = groupId;
+  renderRecordChildren(childId);
+}
+
+function openRecordEditor(session) {
+  editingRecordId = session.id;
+  $('record-start').value = session.startedAt == null ? '' : dateInputValue(session.startedAt);
+  $('record-end').value = dateInputValue(session.endedAt);
+  $('record-duration').value = String(session.workMs / 60_000);
+  $('record-duration-label').hidden = session.startedAt != null;
+  const taskSelect = $('record-task');
+  taskSelect.replaceChildren();
+  appendOption(taskSelect, '', 'タスク未選択');
+  for (const task of tasks) appendOption(taskSelect, task.id, task.title);
+  if (session.taskId && !tasks.some((task) => task.id === session.taskId)) {
+    appendOption(taskSelect, session.taskId, `${session.taskTitle || '削除済みタスク'}（削除済み）`);
+  }
+  taskSelect.value = session.taskId || '';
+  setRecordTarget(session.targetId);
+  $('record-delete-group').hidden = sessions.filter((item) => item.recordGroupId === session.recordGroupId).length < 2;
+  $('record-error').textContent = '';
+  $('record-dialog').showModal();
+}
+
+function closeRecordEditor() {
+  $('record-dialog').close();
+  editingRecordId = null;
+}
+
+function saveRecord(event) {
+  event.preventDefault();
+  const session = sessions.find((item) => item.id === editingRecordId);
+  if (!session) return;
+  const startedAt = $('record-start').value ? new Date($('record-start').value).getTime() : null;
+  const endedAt = new Date($('record-end').value).getTime();
+  const workMs = startedAt == null ? Number($('record-duration').value) * 60_000 : endedAt - startedAt;
+  const targetId = $('record-child').value || $('record-group').value || null;
+  if (!Number.isFinite(endedAt) || (startedAt != null && !Number.isFinite(startedAt)) ||
+      !Number.isFinite(workMs) || workMs <= 0 ||
+      (startedAt != null && startedAt >= endedAt) ||
+      (targetId && !targetLabel(groups, targetId))) {
+    $('record-error').textContent = '日時と作業時間を確認してください。';
+    return;
+  }
+  const taskId = $('record-task').value || null;
+  const task = tasks.find((item) => item.id === taskId);
+  Object.assign(session, { startedAt, endedAt, workMs, taskId,
+    taskTitle: task?.title || (taskId ? session.taskTitle : null), targetId });
+  recalculateTotal();
+  persist();
+  closeRecordEditor();
+  renderGrowth();
+  $('growth-status').textContent = '記録を修正しました。';
+}
+
+function deleteRecord(group) {
+  const session = sessions.find((item) => item.id === editingRecordId);
+  if (!session) return;
+  const targets = group ? sessions.filter((item) => item.recordGroupId === session.recordGroupId) : [session];
+  if (!confirm(`${targets.length}件の記録を削除しますか？`)) return;
+  const removed = new Set(targets.map((item) => item.id));
+  sessions = sessions.filter((item) => !removed.has(item.id));
+  recalculateTotal();
+  persist();
+  closeRecordEditor();
+  renderGrowth();
+  $('growth-status').textContent = `${targets.length}件の記録を削除しました。`;
 }
 
 function validateBackup(raw) {
@@ -551,17 +689,22 @@ function validateBackup(raw) {
   });
   const restoredSessions = raw.sessions.map((session) => {
     if (!Number.isFinite(session.workMs) || session.workMs < 0 ||
-        !Number.isFinite(session.endedAt) ||
-        !validTarget(session.targetId) || !validTarget(session.reviewTargetId) ||
-        typeof session.note !== 'string' || session.note.length > 500 ||
+        !Number.isFinite(session.endedAt) || session.endedAt < 0 ||
+        (session.startedAt != null && (!Number.isFinite(session.startedAt) ||
+          session.startedAt < 0 || session.startedAt >= session.endedAt ||
+          Math.abs(session.endedAt - session.startedAt - session.workMs) > 1)) ||
+        !validTarget(session.targetId) ||
         (session.taskId != null && typeof session.taskId !== 'string') ||
-        (session.taskTitle != null && typeof session.taskTitle !== 'string')) {
+        (session.taskTitle != null && typeof session.taskTitle !== 'string') ||
+        (session.recordGroupId != null &&
+          (typeof session.recordGroupId !== 'string' || !session.recordGroupId))) {
       throw new Error('計測記録が不正です。');
     }
-    return { id: takeId(session.id), endedAt: session.endedAt, workMs: session.workMs,
+    const id = takeId(session.id);
+    return { id, recordGroupId: session.recordGroupId || id,
+      startedAt: session.startedAt ?? null, endedAt: session.endedAt, workMs: session.workMs,
       taskId: session.taskId || null, taskTitle: session.taskTitle || null,
-      targetId: session.targetId || null, reviewTargetId: session.reviewTargetId || null,
-      note: session.note };
+      targetId: session.targetId || null };
   });
   const restoredRun = raw.run == null ? null : restoreRun(raw.run);
   if (raw.run != null && !restoredRun) throw new Error('計測途中のデータが不正です。');
@@ -703,6 +846,27 @@ $('group-form').addEventListener('submit', (event) => {
   renderGrowth();
   $('growth-status').textContent = '育成項目を追加しました。';
 });
+for (const kind of ['day', 'week', 'month', 'year']) {
+  $('period-' + kind).addEventListener('click', () => {
+    periodKind = kind;
+    renderGrowth();
+  });
+}
+$('period-prev').addEventListener('click', () => movePeriod(-1));
+$('period-next').addEventListener('click', () => movePeriod(1));
+$('unclassified-filter').addEventListener('change', renderGrowth);
+$('record-group').addEventListener('change', () => renderRecordChildren());
+$('record-task').addEventListener('change', () => {
+  const task = tasks.find((item) => item.id === $('record-task').value);
+  if (task) setRecordTarget(task.targetId);
+});
+$('record-start').addEventListener('change', () => {
+  $('record-duration-label').hidden = Boolean($('record-start').value);
+});
+$('record-form').addEventListener('submit', saveRecord);
+$('record-cancel').addEventListener('click', closeRecordEditor);
+$('record-delete').addEventListener('click', () => deleteRecord(false));
+$('record-delete-group').addEventListener('click', () => deleteRecord(true));
 $('add-step').addEventListener('click', () => {
   draft.push({ type: '', minutes: '' });
   renderSettings();
@@ -724,6 +888,7 @@ $('main-action').addEventListener('click', () => {
   if (!run) {
     const audioReady = prepareAudio();
     run = createRun(steps, totalWorkMs, Date.now());
+    run.recordGroupId = newId();
     const startedRun = run;
     $('status').textContent = run.phase === 'work' ? '作業を開始しました。' : '休憩を開始しました。';
     audioReady.then((ready) => {
@@ -756,12 +921,15 @@ $('end').addEventListener('click', () => {
   advanceClock(run, Date.now());
   totalWorkMs = run.totalWorkMs;
   const gainedMs = run.sessionWorkMs;
-  if (gainedMs > 0) {
-    const task = tasks.find((item) => item.id === selectedTaskId);
-    sessions.push({ id: newId(), endedAt: Date.now(), workMs: gainedMs,
-      taskId: task?.id || null, taskTitle: task?.title || null,
-      targetId: task && targetLabel(groups, task.targetId) ? task.targetId : null,
-      reviewTargetId: null, note: '' });
+  const task = tasks.find((item) => item.id === selectedTaskId);
+  const recordGroupId = run.recordGroupId || newId();
+  const taskFields = { taskId: task?.id || null, taskTitle: task?.title || null,
+    targetId: task && targetLabel(groups, task.targetId) ? task.targetId : null };
+  if (run.legacyWorkMs > 0) sessions.push({ id: newId(), recordGroupId,
+    startedAt: null, endedAt: Date.now(), workMs: run.legacyWorkMs, ...taskFields });
+  for (const interval of run.workIntervals) {
+    sessions.push({ id: newId(), recordGroupId, startedAt: interval.startedAt,
+      endedAt: interval.endedAt, workMs: interval.endedAt - interval.startedAt, ...taskFields });
   }
   run = null;
   selectedTaskId = null;

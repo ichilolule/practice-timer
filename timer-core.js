@@ -33,6 +33,9 @@ function createRun(rows, totalWorkMs, now) {
     status: 'running',
     totalWorkMs,
     sessionWorkMs: 0,
+    workIntervals: [],
+    legacyWorkMs: 0,
+    newWorkInterval: true,
   };
 }
 
@@ -56,11 +59,18 @@ function advanceClock(run, now) {
   if (run.phase === 'work') {
     run.totalWorkMs += applied;
     run.sessionWorkMs += applied;
+    if (applied > 0) {
+      const last = run.workIntervals.at(-1);
+      if (!run.newWorkInterval && last?.endedAt === run.lastTick) last.endedAt += applied;
+      else run.workIntervals.push({ startedAt: run.lastTick, endedAt: run.lastTick + applied });
+      run.newWorkInterval = false;
+    }
   }
   run.lastTick = now;
   if (run.remainingMs > 0) return null;
   const late = elapsed - applied;
   nextPhase(run);
+  run.newWorkInterval = true;
   if (late > LATE_LIMIT_MS) {
     run.status = 'paused';
     run.lastTick = null;
@@ -88,6 +98,7 @@ function skipPhase(run, now) {
   const event = advanceClock(run, now);
   if (event) return event;
   nextPhase(run);
+  run.newWorkInterval = true;
   run.status = 'running';
   run.lastTick = now;
   return { kind: 'phase', phase: run.phase };
@@ -105,9 +116,17 @@ function restoreRun(raw) {
         remainingMs <= 0 || remainingMs > steps[row].minutes * 60_000 ||
         !Number.isFinite(raw.totalWorkMs) || raw.totalWorkMs < 0 ||
         !Number.isFinite(raw.sessionWorkMs) || raw.sessionWorkMs < 0) return null;
+    const intervals = raw.workIntervals == null ? [] : raw.workIntervals;
+    const legacyWorkMs = raw.workIntervals == null ? raw.sessionWorkMs : raw.legacyWorkMs || 0;
+    if (!Array.isArray(intervals) || !Number.isFinite(legacyWorkMs) || legacyWorkMs < 0 ||
+        intervals.some((item) => !Number.isFinite(item.startedAt) || !Number.isFinite(item.endedAt) ||
+          item.endedAt <= item.startedAt) ||
+        Math.abs(intervals.reduce((sum, item) => sum + item.endedAt - item.startedAt, legacyWorkMs)
+          - raw.sessionWorkMs) > 1) return null;
     return { steps, row, phase, looping: Boolean(raw.looping), remainingMs, lastTick: null,
-      status: 'paused', totalWorkMs: raw.totalWorkMs,
-      sessionWorkMs: raw.sessionWorkMs };
+      status: 'paused', totalWorkMs: raw.totalWorkMs, sessionWorkMs: raw.sessionWorkMs,
+      workIntervals: intervals, legacyWorkMs, newWorkInterval: true,
+      recordGroupId: raw.recordGroupId || null };
   } catch {
     return null;
   }

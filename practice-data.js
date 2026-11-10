@@ -38,24 +38,51 @@ function summarize(groups, sessions) {
   return { groups: result, unclassified };
 }
 
-function assignSession(session, task, groups) {
-  if (!task || !targetLabel(groups, task.targetId)) return false;
-  session.taskId = task.id;
-  session.taskTitle = task.title;
-  session.targetId = task.targetId;
-  return true;
-}
-
 function clearTargets(ids, tasks, sessions) {
   const removed = new Set(ids);
   for (const task of tasks) if (removed.has(task.targetId)) task.targetId = null;
   for (const session of sessions) {
     if (removed.has(session.targetId)) session.targetId = null;
-    if (removed.has(session.reviewTargetId)) session.reviewTargetId = null;
   }
 }
 
-const PracticeData = { targetLabel, summarize, assignSession, clearTargets };
+function periodBounds(kind, anchor) {
+  const start = new Date(anchor);
+  start.setHours(0, 0, 0, 0);
+  if (kind === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+  if (kind === 'month') start.setDate(1);
+  if (kind === 'year') { start.setMonth(0, 1); }
+  const end = new Date(start);
+  if (kind === 'week') end.setDate(end.getDate() + 7);
+  else if (kind === 'month') end.setMonth(end.getMonth() + 1);
+  else if (kind === 'year') end.setFullYear(end.getFullYear() + 1);
+  else end.setDate(end.getDate() + 1);
+  return { start: start.getTime(), end: end.getTime() };
+}
+
+function workInRange(session, start, end) {
+  if (session.startedAt == null) return session.endedAt >= start && session.endedAt < end ? session.workMs : 0;
+  return Math.max(0, Math.min(session.endedAt, end) - Math.max(session.startedAt, start));
+}
+
+function periodBuckets(kind, anchor, sessions) {
+  if (kind === 'day') return [];
+  const bounds = periodBounds(kind, anchor);
+  const buckets = [];
+  let cursor = new Date(bounds.start);
+  while (cursor.getTime() < bounds.end) {
+    const start = cursor.getTime();
+    if (kind === 'year') cursor.setMonth(cursor.getMonth() + 1);
+    else cursor.setDate(cursor.getDate() + 1);
+    const end = cursor.getTime();
+    buckets.push({ start, end, workMs: sessions.reduce((sum, session) =>
+      sum + workInRange(session, start, end), 0) });
+  }
+  return buckets;
+}
+
+const PracticeData = { targetLabel, summarize, clearTargets,
+  periodBounds, workInRange, periodBuckets };
 globalThis.PracticeData = PracticeData;
 if (typeof module !== 'undefined' && module.exports) module.exports = PracticeData;
 })();

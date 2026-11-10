@@ -13,6 +13,7 @@ class Element {
     this.open = false;
     this.value = '';
     this.textContent = '';
+    this.style = {};
     this.classList = { toggle() {} };
   }
   append(...children) { this.children.push(...children); }
@@ -120,7 +121,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   assert.ok(storage.has('practice-timer-v1'));
 });
 
-test('タスクの後選択、未分類の再割り当て、文字JSONの保存・読み込み', async () => {
+test('タスクの後選択、日別記録の割り当て、文字JSONの保存・読み込み', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
   })]]);
@@ -166,19 +167,17 @@ test('タスクの後選択、未分類の再割り当て、文字JSONの保存�
   app.advance(2000);
   await elements.get('end').trigger('click');
   await elements.get('nav-growth').trigger('click');
-  assert.equal(elements.get('unclassified-list').children.length, 1);
-  const unclassified = elements.get('unclassified-list').children[0];
-  unclassified.children[1].value = taskId;
-  await unclassified.children[2].trigger('click');
+  assert.equal(elements.get('record-list').children.length, 2);
+  const unclassified = elements.get('record-list').children[1];
+  await unclassified.children.at(-1).trigger('click');
+  assert.equal(elements.get('record-dialog').open, true);
+  elements.get('record-task').value = taskId;
+  await elements.get('record-task').trigger('change');
+  await elements.get('record-form').trigger('submit');
   saved = JSON.parse(storage.get('practice-timer-v1'));
   assert.equal(saved.sessions[1].targetId, handId);
+  assert.equal(saved.sessions[1].taskId, taskId);
   assert.equal(saved.totalWorkMs, 5000);
-  const record = elements.get('session-list').children[0];
-  record.querySelector('select').value = handId;
-  record.querySelector('input').value = '指の角度が硬い';
-  await record.children.at(-1).trigger('click');
-  saved = JSON.parse(storage.get('practice-timer-v1'));
-  assert.equal(saved.sessions[1].note, '指の角度が硬い');
 
   await elements.get('nav-timer').trigger('click');
   await elements.get('settings-toggle').trigger('click');
@@ -186,6 +185,7 @@ test('タスクの後選択、未分類の再割り当て、文字JSONの保存�
   const backup = JSON.parse(await app.exportedBlob.text());
   assert.equal(backup.format, 'practice-timer-beta');
   assert.equal(backup.sessions.length, 2);
+  assert.equal('note' in backup.sessions[1], false);
   assert.equal(JSON.stringify(backup).includes('data:image'), false);
   elements.get('import-file').files = [{ size: app.exportedBlob.size, text: () => app.exportedBlob.text() }];
   await elements.get('import-file').trigger('change');
@@ -371,11 +371,67 @@ test('既存タイマーの累計は未分類記録として一度だけ引き�
   })]]);
   const first = mount(storage);
   await first.elements.get('nav-growth').trigger('click');
-  assert.equal(first.elements.get('unclassified-list').children.length, 1);
+  assert.equal(first.elements.get('record-list').children.length, 1);
   first.elements.get('group-title').value = '練習';
   await first.elements.get('group-form').trigger('submit');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).sessions.length, 1);
   const second = mount(storage);
   await second.elements.get('nav-growth').trigger('click');
-  assert.equal(second.elements.get('unclassified-list').children.length, 1);
+  assert.equal(second.elements.get('record-list').children.length, 1);
+});
+
+test('繰り返し計測の一件削除と起動分削除で累計を再計算する', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 },
+      { type: 'work', minutes: 0.1 }], totalWorkMs: 0,
+  })]]);
+  const app = mount(storage);
+  const { elements } = app;
+  await elements.get('main-action').trigger('click');
+  app.advance(3000);
+  await elements.get('skip').trigger('click');
+  app.advance(2000);
+  await elements.get('skip').trigger('click');
+  app.advance(4000);
+  await elements.get('end').trigger('click');
+  const original = storage.get('practice-timer-v1');
+  let saved = JSON.parse(original);
+  assert.deepEqual(saved.sessions.map((item) => item.workMs), [3000, 4000]);
+  assert.equal(saved.sessions[0].recordGroupId, saved.sessions[1].recordGroupId);
+  await elements.get('nav-growth').trigger('click');
+  assert.equal(elements.get('record-list').children.length, 2);
+
+  await elements.get('record-list').children[0].children.at(-1).trigger('click');
+  assert.equal(elements.get('record-delete-group').hidden, false);
+  await elements.get('record-delete').trigger('click');
+  saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.sessions.length, 1);
+  assert.equal(saved.totalWorkMs, 4000);
+
+  await elements.get('record-list').children[0].children.at(-1).trigger('click');
+  const end = new Date(elements.get('record-end').value);
+  const corrected = new Date(end.getTime() - 2000);
+  elements.get('record-end').value = new Date(corrected.getTime() - corrected.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 19);
+  await elements.get('record-form').trigger('submit');
+  saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.sessions[0].workMs, 2000);
+  assert.equal(saved.totalWorkMs, 2000);
+
+  for (const [kind, count] of [['week', 7], ['month', 31], ['year', 12]]) {
+    await elements.get('period-' + kind).trigger('click');
+    assert.equal(elements.get('period-chart').children.length, count);
+  }
+  await elements.get('period-chart').children[0].trigger('click');
+  assert.equal(elements.get('period-chart').children.length, 31);
+  await elements.get('period-chart').children[0].trigger('click');
+  assert.equal(elements.get('day-records').hidden, false);
+
+  const all = mount(new Map([['practice-timer-v1', original]]));
+  await all.elements.get('nav-growth').trigger('click');
+  await all.elements.get('record-list').children[0].children.at(-1).trigger('click');
+  await all.elements.get('record-delete-group').trigger('click');
+  const afterAll = JSON.parse(all.storage.get('practice-timer-v1'));
+  assert.equal(afterAll.sessions.length, 0);
+  assert.equal(afterAll.totalWorkMs, 0);
 });

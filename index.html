@@ -69,17 +69,37 @@
 
     <section id="growth-view" aria-label="積み上げ" hidden>
       <h2>積み上げ</h2>
+      <div id="period-tabs" class="period-tabs" role="group" aria-label="集計期間">
+        <button id="period-day" type="button">日</button>
+        <button id="period-week" type="button">週</button>
+        <button id="period-month" type="button">月</button>
+        <button id="period-year" type="button">年</button>
+      </div>
+      <div class="period-navigation">
+        <button id="period-prev" type="button" aria-label="前の期間">←</button>
+        <strong id="period-label"></strong>
+        <button id="period-next" type="button" aria-label="次の期間">→</button>
+      </div>
       <p id="growth-total"></p>
-      <p class="subtle">育成項目は自由に追加できます。内訳に入れた時間は親の合計にも含まれます。</p>
-      <form id="group-form" class="inline-form">
-        <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="育成項目の名前" required>
-        <button type="submit">＋育成項目</button>
-      </form>
-      <div id="group-list"></div>
-      <h2>未分類の時間</h2>
-      <div id="unclassified-list"></div>
-      <h2>最近の記録・振り返り</h2>
-      <div id="session-list"></div>
+      <div id="period-chart" class="period-chart"></div>
+      <h3>育成項目の時間</h3>
+      <div id="period-group-list"></div>
+      <section id="day-records">
+        <div class="day-record-heading">
+          <h3>この日の記録 <span id="day-record-count"></span></h3>
+          <label><input id="unclassified-filter" type="checkbox"> 加算先なしのみ</label>
+        </div>
+        <div id="record-list"></div>
+      </section>
+      <details id="growth-manage">
+        <summary>育成項目を管理</summary>
+        <p class="subtle">育成項目は自由に追加できます。内訳に入れた時間は親の合計にも含まれます。</p>
+        <form id="group-form" class="inline-form">
+          <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="育成項目の名前" required>
+          <button type="submit">＋育成項目</button>
+        </form>
+        <div id="group-list"></div>
+      </details>
       <p id="growth-status" role="status" aria-live="polite"></p>
     </section>
 
@@ -98,7 +118,7 @@
       <h2>文字だけのJSONバックアップ</h2>
       <button id="export-data" type="button">JSONを保存</button>
       <label class="import-label">JSONを読み込む <input id="import-file" type="file" accept=".json,application/json"></label>
-      <p class="subtle">読み込みは現在のタスク・時間・育成項目・メモ・タイマー設定を置き換えます。計測中は読み込めません。</p>
+      <p class="subtle">読み込みは現在のタスク・時間・育成項目・タイマー設定を置き換えます。計測中は読み込めません。</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
 
@@ -127,6 +147,28 @@
           <button id="task-cancel" type="button">キャンセル</button>
         </div>
       </form>
+    </dialog>
+    <dialog id="record-dialog" aria-labelledby="record-dialog-title">
+      <h2 id="record-dialog-title">記録を修正</h2>
+      <form id="record-form">
+        <label>開始日時 <input id="record-start" type="datetime-local" step="1"></label>
+        <label>終了日時 <input id="record-end" type="datetime-local" step="1" required></label>
+        <label id="record-duration-label" hidden>作業時間（分） <input id="record-duration" type="number" min="0.01" step="any"></label>
+        <label>タスク <select id="record-task"></select></label>
+        <div class="category-fields">
+          <label>加算先の大分類 <select id="record-group"></select></label>
+          <label>小分類 <select id="record-child"></select></label>
+        </div>
+        <p id="record-error" role="alert"></p>
+        <div class="task-actions">
+          <button type="submit">保存</button>
+          <button id="record-cancel" type="button">戻る</button>
+        </div>
+      </form>
+      <div class="record-delete-actions">
+        <button id="record-delete" type="button">この記録を削除</button>
+        <button id="record-delete-group" type="button" hidden>この起動分をすべて削除</button>
+      </div>
     </dialog>
   </main>
 </body>

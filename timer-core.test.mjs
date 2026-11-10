@@ -45,6 +45,10 @@ test('一時停止、再開、途中スキップは計測した作業分だけ�
   resumeRun(run, 500000);
   assert.deepEqual(skipPhase(run, 500500), { kind: 'phase', phase: 'rest' });
   assert.equal(run.totalWorkMs, 5500);
+  assert.deepEqual(run.workIntervals, [
+    { startedAt: 0, endedAt: 5000 },
+    { startedAt: 500000, endedAt: 500500 },
+  ]);
 });
 
 test('一時停止中の次へは次の工程を開始する', () => {
@@ -72,4 +76,5 @@ test('再読み込み時は保存された残り時間から一時停止で復�
   assert.equal(restored.remainingMs, 4000);
   assert.equal(restored.totalWorkMs, 2000);
   assert.equal(restored.lastTick, null);
+  assert.deepEqual(restored.workIntervals, [{ startedAt: 0, endedAt: 2000 }]);
 });
