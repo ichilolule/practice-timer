@@ -16,6 +16,7 @@ let groups = [];
 let sessions = [];
 let selectedTaskId = null;
 let editingTaskId = null;
+let taskEditorSelectAfter = false;
 let audioContext = null;
 let lastSaved = 0;
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -61,37 +62,15 @@ function timeText(ms, roundUp = false) {
     : `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
-function renderFlow() {
-  const list = $('flow');
-  list.replaceChildren();
-  const activeSteps = run?.steps ?? steps;
-  for (const [index, step] of activeSteps.entries()) {
-    const item = document.createElement('li');
-    item.textContent = `${step.type === 'work' ? '作業' : '休憩'} ${step.minutes}分`;
-    item.classList.toggle('active', Boolean(run && run.row === index));
-    list.append(item);
-  }
-  if (!activeSteps.length) {
-    const item = document.createElement('li');
-    item.textContent = '手順はまだありません。設定から追加してください。';
-    list.append(item);
-  }
-}
-
 function renderTimer() {
   const activeSteps = run?.steps ?? steps;
   $('phase-name').textContent = run ? (run.phase === 'work' ? '作業' : '休憩')
     : activeSteps.length ? '開始できます' : '手順を設定してください';
   $('clock').textContent = run ? timeText(run.remainingMs, true) : '00:00';
-  $('position').textContent = run ? `${run.looping ? '最後の作業・休憩を反復中' : `${run.row + 1} / ${run.steps.length} 行目`}・${run.status === 'paused' ? '一時停止中' : '進行中'}`
-    : activeSteps.length ? '最後の作業・休憩を繰り返します' : '';
   $('main-action').textContent = run?.status === 'running' ? '一時停止' : run ? '再開' : '開始';
   $('main-action').disabled = !run && !steps.length;
   $('skip').disabled = !run;
   $('end').disabled = !run;
-  $('total').textContent = `積み上げた作業時間：${timeText(run?.totalWorkMs ?? totalWorkMs)}`;
-  $('active-task-panel').hidden = !run;
-  renderFlow();
 }
 
 function appendOption(select, value, label) {
@@ -112,16 +91,40 @@ function appendTargetOptions(select, selected = '', emptyLabel = '未分類') {
 }
 
 function renderTaskChoice() {
-  const select = $('active-task');
-  select.replaceChildren();
-  appendOption(select, '', 'まだ選ばない（未分類）');
-  for (const task of tasks) appendOption(select, task.id, task.title);
-  select.value = selectedTaskId || '';
-  select.disabled = Boolean(selectedTaskId);
   const task = tasks.find((item) => item.id === selectedTaskId);
+  $('active-task-name').textContent = task?.title || '未選択';
   $('active-task-hint').textContent = task
     ? `${task.firstStep || '最初の一手は未登録'}｜別タスクへ移るときは終了して再開始します。`
-    : '開始後に選んでも、選ぶ前の作業時間を含めます。';
+    : run ? '選ぶ前の作業時間も、選んだタスクに加算します。' : 'まず開始し、タスクはあとから選べます。';
+  $('choose-task').disabled = !run || Boolean(selectedTaskId);
+  renderTaskPicker();
+}
+
+function renderTaskPicker() {
+  const list = $('task-picker-list');
+  list.replaceChildren();
+  const available = tasks.filter((task) => task.completedAt == null);
+  if (!available.length) {
+    const empty = document.createElement('li');
+    empty.textContent = '未完了のタスクはありません。新しく追加できます。';
+    list.append(empty);
+  }
+  for (const task of available) {
+    const item = document.createElement('li');
+    const title = document.createElement('strong');
+    title.textContent = task.title;
+    const detail = document.createElement('p');
+    detail.textContent = task.firstStep || '最初の一手は未登録';
+    const choose = rowButton('この回に選ぶ', `${task.title}をこの回に選ぶ`, () => {
+      if (!run || selectedTaskId || task.completedAt != null) return;
+      selectedTaskId = task.id;
+      persist();
+      $('task-picker-dialog').close();
+      renderTaskChoice();
+    });
+    item.append(title, detail, choose);
+    list.append(item);
+  }
 }
 
 function switchView(name) {
@@ -209,50 +212,143 @@ function renderSettings() {
 }
 
 function resetTaskForm() {
+  if ($('task-dialog').open) $('task-dialog').close();
   editingTaskId = null;
-  $('task-form').reset();
-  $('task-save').textContent = '＋タスクを追加';
-  $('task-cancel').hidden = true;
-  appendTargetOptions($('task-target'));
+  taskEditorSelectAfter = false;
+  $('task-title').value = '';
+  $('task-first-step').value = '';
+  $('task-group').value = '';
+  renderTaskChildren();
 }
 
-function renderTasks() {
-  const selectedTarget = $('task-target').value;
-  appendTargetOptions($('task-target'), selectedTarget);
-  const list = $('task-list');
-  list.replaceChildren();
-  if (!tasks.length) {
-    const item = document.createElement('li');
-    item.textContent = 'タスクはまだありません。計測はタスクなしでも開始できます。';
-    list.append(item);
-    return;
+function taskTargetParts(targetId) {
+  for (const group of groups) {
+    if (group.id === targetId) return { groupId: group.id, childId: '' };
+    if (group.children.some((child) => child.id === targetId)) return { groupId: group.id, childId: targetId };
   }
-  for (const task of tasks) {
-    const item = document.createElement('li');
-    const title = document.createElement('strong');
-    title.textContent = task.title;
-    const detail = document.createElement('p');
-    detail.textContent = `最初の一手：${task.firstStep || '未登録'}｜加算先：${targetLabel(groups, task.targetId) || '未分類'}`;
-    const edit = rowButton('編集', `${task.title}を編集`, () => {
-      editingTaskId = task.id;
-      $('task-title').value = task.title;
-      $('task-first-step').value = task.firstStep;
-      appendTargetOptions($('task-target'), task.targetId);
-      $('task-save').textContent = '変更を保存';
-      $('task-cancel').hidden = false;
-      $('task-title').focus();
-    });
-    const remove = rowButton('削除', `${task.title}を削除`, () => {
-      if (!confirm(`「${task.title}」を削除しますか？過去の計測記録は残ります。`)) return;
-      tasks = tasks.filter((item) => item.id !== task.id);
-      if (selectedTaskId === task.id) selectedTaskId = null;
-      if (editingTaskId === task.id) resetTaskForm();
+  return { groupId: '', childId: '' };
+}
+
+function renderTaskChildren(selected = '') {
+  const group = groups.find((item) => item.id === $('task-group').value);
+  const select = $('task-child');
+  select.replaceChildren();
+  appendOption(select, '', group ? '小分類なし（大分類へ加算）' : '大分類を先に選択');
+  for (const child of group?.children || []) appendOption(select, child.id, child.title);
+  select.value = group?.children.some((child) => child.id === selected) ? selected : '';
+  select.disabled = !group || !group.children.length;
+}
+
+function openTaskEditor(task = null, selectAfter = false) {
+  resetTaskForm();
+  editingTaskId = task?.id || null;
+  taskEditorSelectAfter = !task && selectAfter && Boolean(run && !selectedTaskId);
+  $('task-title').value = task?.title || '';
+  $('task-first-step').value = task?.firstStep || '';
+  const { groupId, childId } = taskTargetParts(task?.targetId);
+  const groupSelect = $('task-group');
+  groupSelect.replaceChildren();
+  appendOption(groupSelect, '', '未分類');
+  for (const group of groups) appendOption(groupSelect, group.id, group.title);
+  groupSelect.value = groupId;
+  renderTaskChildren(childId);
+  $('task-dialog-title').textContent = task ? 'タスクを編集' : 'タスクを追加';
+  $('task-save').textContent = task ? '変更を保存' : taskEditorSelectAfter ? '追加してこの回に選ぶ' : '追加';
+  $('task-save-only').hidden = !taskEditorSelectAfter;
+  $('task-dialog').showModal();
+  $('task-title').focus();
+}
+
+function saveTask(selectAfter) {
+  const title = $('task-title').value.trim();
+  if (!title) return;
+  const firstStep = $('task-first-step').value.trim();
+  const groupId = $('task-group').value;
+  const childId = $('task-child').value;
+  const targetId = childId || groupId || null;
+  if (targetId && !targetLabel(groups, targetId)) return;
+  let task = tasks.find((item) => item.id === editingTaskId);
+  const updating = Boolean(task);
+  if (task) Object.assign(task, { title, firstStep, targetId });
+  else {
+    task = { id: newId(), title, firstStep, targetId, completedAt: null };
+    tasks.push(task);
+  }
+  if (selectAfter && run && !selectedTaskId) selectedTaskId = task.id;
+  persist();
+  resetTaskForm();
+  renderTasks();
+  renderTaskChoice();
+  const message = updating ? 'タスクを更新しました。' : selectedTaskId === task.id && selectAfter
+    ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
+  $('task-status').textContent = message;
+  if (!$('timer-view').hidden) $('status').textContent = message;
+}
+
+function taskRow(task, completed) {
+  const item = document.createElement('li');
+  const title = document.createElement('strong');
+  title.textContent = task.title;
+  const detail = document.createElement('p');
+  detail.textContent = `最初の一手：${task.firstStep || '未登録'}｜加算先：${targetLabel(groups, task.targetId) || '未分類'}`;
+  item.append(title, detail);
+  if (completed) {
+    const date = document.createElement('p');
+    date.className = 'subtle';
+    date.textContent = `完了：${new Date(task.completedAt).toLocaleDateString('ja-JP')}`;
+    item.append(date);
+  }
+  const actions = document.createElement('div');
+  actions.className = 'task-actions';
+  actions.append(rowButton('編集', `${task.title}を編集`, () => openTaskEditor(task)));
+  actions.append(completed
+    ? rowButton('戻す', `${task.title}を未完了に戻す`, () => {
+      task.completedAt = null;
       persist();
       renderTasks();
       renderTaskChoice();
-    });
-    item.append(title, detail, edit, remove);
-    list.append(item);
+      $('task-status').textContent = 'タスクを未完了に戻しました。';
+    })
+    : rowButton('完了', `${task.title}を完了にする`, () => {
+      task.completedAt = Date.now();
+      persist();
+      renderTasks();
+      renderTaskChoice();
+      $('task-status').textContent = '完了済みに移しました。';
+    }));
+  actions.append(rowButton('削除', `${task.title}を削除`, () => {
+    if (!confirm(`「${task.title}」を削除しますか？過去の計測記録は残ります。`)) return;
+    tasks = tasks.filter((item) => item.id !== task.id);
+    persist();
+    renderTasks();
+    renderTaskChoice();
+    $('task-status').textContent = 'タスクを削除しました。';
+  }, Boolean(run && selectedTaskId === task.id)));
+  item.append(actions);
+  return item;
+}
+
+function renderTasks() {
+  const active = tasks.filter((task) => task.completedAt == null);
+  const completed = tasks.filter((task) => task.completedAt != null)
+    .sort((a, b) => b.completedAt - a.completedAt);
+  $('active-count').textContent = `(${active.length})`;
+  $('completed-count').textContent = `(${completed.length})`;
+  const activeList = $('task-list');
+  const completedList = $('completed-list');
+  activeList.replaceChildren();
+  completedList.replaceChildren();
+  for (const task of active) activeList.append(taskRow(task, false));
+  for (const task of completed) completedList.append(taskRow(task, true));
+  if (!active.length) {
+    const empty = document.createElement('li');
+    empty.textContent = '未完了のタスクはありません。上から追加できます。';
+    activeList.append(empty);
+  }
+  if (!completed.length) {
+    const empty = document.createElement('li');
+    empty.textContent = '完了済みのタスクはまだありません。';
+    completedList.append(empty);
   }
 }
 
@@ -430,11 +526,12 @@ function validateBackup(raw) {
   }));
   const validTarget = (id) => id == null || Boolean(targetLabel(restoredGroups, id));
   const restoredTasks = raw.tasks.map((task) => {
-    if (typeof task.firstStep !== 'string' || task.firstStep.length > 500 || !validTarget(task.targetId)) {
+    if (typeof task.firstStep !== 'string' || task.firstStep.length > 500 || !validTarget(task.targetId) ||
+        (task.completedAt != null && (!Number.isFinite(task.completedAt) || task.completedAt < 0))) {
       throw new Error('タスクが不正です。');
     }
     return { id: takeId(task.id), title: title(task.title, 100),
-      firstStep: task.firstStep, targetId: task.targetId || null };
+      firstStep: task.firstStep, targetId: task.targetId || null, completedAt: task.completedAt ?? null };
   });
   const restoredSessions = raw.sessions.map((session) => {
     if (!Number.isFinite(session.workMs) || session.workMs < 0 ||
@@ -544,30 +641,35 @@ $('settings-toggle').addEventListener('click', showSettings);
 for (const view of ['timer', 'tasks', 'growth']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
-$('go-tasks').addEventListener('click', () => switchView('tasks'));
-$('active-task').addEventListener('change', () => {
+$('choose-task').addEventListener('click', () => {
   if (!run || selectedTaskId) return;
-  const task = tasks.find((item) => item.id === $('active-task').value);
-  selectedTaskId = task?.id || null;
+  renderTaskPicker();
+  $('task-picker-dialog').showModal();
+});
+$('timer-add-task').addEventListener('click', () => openTaskEditor(null, true));
+$('task-picker-add').addEventListener('click', () => {
+  $('task-picker-dialog').close();
+  openTaskEditor(null, true);
+});
+$('task-picker-close').addEventListener('click', () => $('task-picker-dialog').close());
+$('task-details-add').addEventListener('click', () => openTaskEditor());
+$('task-group').addEventListener('change', () => renderTaskChildren());
+$('quick-task-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const title = $('quick-task-title').value.trim();
+  if (!title) return;
+  tasks.push({ id: newId(), title, firstStep: '', targetId: null, completedAt: null });
+  $('quick-task-title').value = '';
   persist();
+  renderTasks();
   renderTaskChoice();
+  $('task-status').textContent = 'タスクを追加しました。';
 });
 $('task-form').addEventListener('submit', (event) => {
   event.preventDefault();
-  const title = $('task-title').value.trim();
-  if (!title) return;
-  const firstStep = $('task-first-step').value.trim();
-  const targetId = $('task-target').value || null;
-  if (targetId && !targetLabel(groups, targetId)) return;
-  const task = tasks.find((item) => item.id === editingTaskId);
-  if (task) Object.assign(task, { title, firstStep, targetId });
-  else tasks.push({ id: newId(), title, firstStep, targetId });
-  persist();
-  resetTaskForm();
-  renderTasks();
-  renderTaskChoice();
-  $('task-status').textContent = task ? 'タスクを更新しました。' : 'タスクを追加しました。';
+  saveTask(taskEditorSelectAfter);
 });
+$('task-save-only').addEventListener('click', () => saveTask(false));
 $('task-cancel').addEventListener('click', resetTaskForm);
 $('group-form').addEventListener('submit', (event) => {
   event.preventDefault();
