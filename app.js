@@ -94,9 +94,10 @@ function renderTaskChoice() {
   const task = tasks.find((item) => item.id === selectedTaskId);
   $('active-task-name').textContent = task?.title || '未選択';
   $('active-task-hint').textContent = task
-    ? `${task.firstStep || '最初の一手は未登録'}｜別タスクへ移るときは終了して再開始します。`
-    : run ? '選ぶ前の作業時間も、選んだタスクに加算します。' : 'まず開始し、タスクはあとから選べます。';
-  $('choose-task').disabled = !run || Boolean(selectedTaskId);
+    ? `${task.firstStep || '最初の一手は未登録'}｜${run ? '別タスクへ移るときは終了して再開始します。' : '開始前なら選び直せます。'}`
+    : run ? '選ぶ前の作業時間も、選んだタスクに加算します。' : '開始前にも、開始後にもタスクを選べます。';
+  $('choose-task').textContent = task && !run ? 'タスクを選び直す' : 'タスクを選ぶ';
+  $('choose-task').disabled = Boolean(run && selectedTaskId);
   renderTaskPicker();
 }
 
@@ -116,7 +117,7 @@ function renderTaskPicker() {
     const detail = document.createElement('p');
     detail.textContent = task.firstStep || '最初の一手は未登録';
     const choose = rowButton('この回に選ぶ', `${task.title}をこの回に選ぶ`, () => {
-      if (!run || selectedTaskId || task.completedAt != null) return;
+      if ((run && selectedTaskId) || task.completedAt != null) return;
       selectedTaskId = task.id;
       persist();
       $('task-picker-dialog').close();
@@ -324,6 +325,7 @@ function taskRow(task, completed) {
     })
     : rowButton('完了', `${task.title}を完了にする`, () => {
       task.completedAt = Date.now();
+      if (!run && selectedTaskId === task.id) selectedTaskId = null;
       persist();
       renderTasks();
       renderTaskChoice();
@@ -332,6 +334,7 @@ function taskRow(task, completed) {
   actions.append(rowButton('削除', `${task.title}を削除`, () => {
     if (!confirm(`「${task.title}」を削除しますか？過去の計測記録は残ります。`)) return;
     tasks = tasks.filter((item) => item.id !== task.id);
+    if (selectedTaskId === task.id) selectedTaskId = null;
     persist();
     renderTasks();
     renderTaskChoice();
@@ -568,7 +571,8 @@ function validateBackup(raw) {
       (restoredRun && Math.abs(restoredRun.totalWorkMs - restoredTotal) > 1)) {
     throw new Error('累計時間が不正です。');
   }
-  const restoredSelection = restoredRun && restoredTasks.some((task) => task.id === raw.selectedTaskId)
+  const restoredSelection = restoredTasks.some((task) => task.id === raw.selectedTaskId &&
+    (restoredRun || task.completedAt == null))
     ? raw.selectedTaskId : null;
   return { steps: restoredSteps, tasks: restoredTasks, groups: restoredGroups,
     sessions: restoredSessions, run: restoredRun, totalWorkMs: restoredTotal,
@@ -655,7 +659,7 @@ for (const view of ['timer', 'tasks', 'growth']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
 $('choose-task').addEventListener('click', () => {
-  if (!run || selectedTaskId) return;
+  if (run && selectedTaskId) return;
   renderTaskPicker();
   $('task-picker-dialog').showModal();
 });
@@ -720,7 +724,6 @@ $('main-action').addEventListener('click', () => {
   if (!run) {
     const audioReady = prepareAudio();
     run = createRun(steps, totalWorkMs, Date.now());
-    selectedTaskId = null;
     const startedRun = run;
     $('status').textContent = run.phase === 'work' ? '作業を開始しました。' : '休憩を開始しました。';
     audioReady.then((ready) => {

@@ -264,6 +264,46 @@ test('タイマー画面でEnterからタスクを即追加し、未選択の回
   await elements.get('end').trigger('click');
 });
 
+test('開始前に選んだタスクを選び直せて、再読み込みと開始後も保持する', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
+  })]]);
+  const first = mount(storage);
+  for (const title of ['構図を考える', '線を練習する']) {
+    first.elements.get('timer-quick-task-title').value = title;
+    await first.elements.get('timer-quick-task-form').trigger('submit');
+  }
+  assert.equal(first.elements.get('choose-task').disabled, false);
+  await first.elements.get('choose-task').trigger('click');
+  assert.equal(first.elements.get('task-picker-dialog').open, true);
+  await first.elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  assert.equal(first.elements.get('active-task-name').textContent, '構図を考える');
+
+  const second = mount(storage);
+  const { elements } = second;
+  assert.equal(elements.get('active-task-name').textContent, '構図を考える');
+  assert.equal(elements.get('choose-task').textContent, 'タスクを選び直す');
+  await elements.get('choose-task').trigger('click');
+  await elements.get('task-picker-list').children[1].querySelector('button').trigger('click');
+  const taskId = JSON.parse(storage.get('practice-timer-v1')).selectedTaskId;
+  assert.equal(elements.get('active-task-name').textContent, '線を練習する');
+  await elements.get('main-action').trigger('click');
+  assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
+  assert.equal(elements.get('choose-task').disabled, true);
+  second.advance(2000);
+  await elements.get('end').trigger('click');
+  const saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.sessions[0].taskId, taskId);
+  assert.equal(saved.selectedTaskId, null);
+  assert.equal(elements.get('choose-task').disabled, false);
+
+  await elements.get('choose-task').trigger('click');
+  await elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  await elements.get('nav-tasks').trigger('click');
+  await elements.get('task-list').children[0].children.at(-1).children[1].trigger('click');
+  assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, null);
+});
+
 test('タイマー画面から二段階の加算先で追加し、この回に選べる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
