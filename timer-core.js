@@ -1,7 +1,10 @@
-export const MAX_MINUTES = 240;
-export const LATE_LIMIT_MS = 90_000;
+(() => {
+'use strict';
 
-export function normalizeSteps(rows) {
+const MAX_MINUTES = 240;
+const LATE_LIMIT_MS = 90_000;
+
+function normalizeSteps(rows) {
   if (!Array.isArray(rows) || !rows.length) throw new Error('手順を1件以上追加してください。');
   const steps = rows.map((row, index) => {
     const minutes = Number(row.minutes);
@@ -18,7 +21,7 @@ export function normalizeSteps(rows) {
   return steps;
 }
 
-export function createRun(rows, totalWorkMs, now) {
+function createRun(rows, totalWorkMs, now) {
   const steps = normalizeSteps(rows);
   return {
     steps,
@@ -45,7 +48,7 @@ function nextPhase(run) {
   run.remainingMs = run.steps[run.row].minutes * 60_000;
 }
 
-export function advanceClock(run, now) {
+function advanceClock(run, now) {
   if (!run || run.status !== 'running') return null;
   const elapsed = Math.max(0, now - run.lastTick);
   const applied = Math.min(elapsed, run.remainingMs);
@@ -66,7 +69,7 @@ export function advanceClock(run, now) {
   return { kind: 'phase', phase: run.phase };
 }
 
-export function pauseRun(run, now) {
+function pauseRun(run, now) {
   const event = advanceClock(run, now);
   if (run.status === 'running') {
     run.status = 'paused';
@@ -75,13 +78,13 @@ export function pauseRun(run, now) {
   return event;
 }
 
-export function resumeRun(run, now) {
+function resumeRun(run, now) {
   if (run.status !== 'paused') return;
   run.status = 'running';
   run.lastTick = now;
 }
 
-export function skipPhase(run, now) {
+function skipPhase(run, now) {
   const event = advanceClock(run, now);
   if (event) return event;
   nextPhase(run);
@@ -90,7 +93,7 @@ export function skipPhase(run, now) {
   return { kind: 'phase', phase: run.phase };
 }
 
-export function restoreRun(raw) {
+function restoreRun(raw) {
   if (!raw || !Array.isArray(raw.steps)) return null;
   try {
     const steps = normalizeSteps(raw.steps);
@@ -109,3 +112,8 @@ export function restoreRun(raw) {
     return null;
   }
 }
+
+const TimerCore = { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase };
+globalThis.TimerCore = TimerCore;
+if (typeof module !== 'undefined' && module.exports) module.exports = TimerCore;
+})();

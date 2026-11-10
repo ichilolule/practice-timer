@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } from './timer-core.mjs';
+import core from './timer-core.js';
+
+const { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } = core;
 
 const sequence = [
   { type: 'work', minutes: 0.1 },

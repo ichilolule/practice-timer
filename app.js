@@ -1,4 +1,7 @@
-import { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } from './timer-core.mjs';
+(() => {
+'use strict';
+
+const { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } = globalThis.TimerCore;
 
 const STORAGE_KEY = 'practice-timer-v1';
 const $ = (id) => document.getElementById(id);
@@ -298,3 +301,4 @@ setInterval(() => {
   if (Date.now() - lastSaved >= 1000) persist();
   if (!$('timer-view').hidden) renderTimer();
 }, 250);
+})();
