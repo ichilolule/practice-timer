@@ -434,4 +434,6 @@ test('繰り返し計測の一件削除と起動分削除で累計を再計算�
   const afterAll = JSON.parse(all.storage.get('practice-timer-v1'));
   assert.equal(afterAll.sessions.length, 0);
   assert.equal(afterAll.totalWorkMs, 0);
+  await all.elements.get('period-week').trigger('click');
+  assert.equal(all.elements.get('period-chart').hidden, true);
 });

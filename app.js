@@ -436,8 +436,8 @@ function renderGrowth() {
   $('growth-total').textContent = `この期間 ${timeText(periodMs)}｜全期間 ${timeText(run?.totalWorkMs ?? totalWorkMs)}`;
   const chart = $('period-chart');
   chart.replaceChildren();
-  chart.hidden = periodKind === 'day';
   const buckets = periodBuckets(periodKind, periodAnchor, sessions);
+  chart.hidden = !buckets.some((bucket) => bucket.workMs > 0);
   const largest = Math.max(1, ...buckets.map((bucket) => bucket.workMs));
   for (const bucket of buckets) {
     const date = new Date(bucket.start);
