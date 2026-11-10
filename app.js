@@ -688,6 +688,7 @@ $('import-file').addEventListener('change', async () => {
     resetTaskForm();
     renderTimer();
     renderTaskChoice();
+    $('status').textContent = 'JSONを読み込みました。';
     $('backup-status').textContent = 'JSONを読み込みました。';
     if (!steps.length) showSettings();
   } catch (error) {

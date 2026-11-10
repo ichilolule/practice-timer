@@ -178,6 +178,7 @@ test('タスクの後選択、未分類の再割り当て、文字JSONの保存�
   elements.get('import-file').files = [{ size: app.exportedBlob.size, text: () => app.exportedBlob.text() }];
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /読み込みました/);
+  assert.equal(elements.get('status').textContent, 'JSONを読み込みました。');
   const beforeInvalidImport = storage.get('practice-timer-v1');
   elements.get('import-file').files = [{ size: 20, text: async () => '{"format":"wrong"}' }];
   await elements.get('import-file').trigger('change');
