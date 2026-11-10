@@ -149,6 +149,8 @@ function renderSettings() {
 function showSettings() {
   draft = steps.map((step) => ({ ...step }));
   $('settings-error').textContent = '';
+  $('permission-status').textContent = 'Notification' in window
+    ? `通知の許可状態：${Notification.permission}` : 'この環境では通知を利用できません。';
   renderSettings();
   $('timer-view').hidden = true;
   $('settings-view').hidden = false;
@@ -166,15 +168,16 @@ async function prepareAudio() {
   try {
     audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
     await audioContext.resume();
+    return audioContext.state === 'running';
   } catch {
-    $('status').textContent = '音を準備できませんでした。タイマーは続行できます。';
+    return false;
   }
 }
 
 function playSound(phase) {
   if (!audioContext || audioContext.state !== 'running') return;
   const start = audioContext.currentTime;
-  const frequencies = phase === 'work' ? [660, 880] : [660, 520, 440];
+  const frequencies = phase === 'work' ? [660, 880] : [659.25, 554.37, 440];
   frequencies.forEach((frequency, index) => {
     const at = start + index * 0.27;
     const oscillator = audioContext.createOscillator();
@@ -195,6 +198,7 @@ function notifyPhase(phase) {
   try {
     new Notification(phase === 'work' ? '作業を開始' : '休憩を開始', {
       body: `${run.steps[run.row].minutes}分です。`,
+      silent: true,
     });
   } catch {
     $('status').textContent = '通知を表示できませんでした。';
@@ -231,17 +235,22 @@ $('save-settings').addEventListener('click', () => {
 });
 $('cancel-settings').addEventListener('click', showTimer);
 
-$('main-action').addEventListener('click', async () => {
+$('main-action').addEventListener('click', () => {
   if (!run) {
-    await prepareAudio();
+    const audioReady = prepareAudio();
     run = createRun(steps, totalWorkMs, Date.now());
-    $('status').textContent = '作業を開始しました。';
-    playSound('work');
+    const startedRun = run;
+    $('status').textContent = run.phase === 'work' ? '作業を開始しました。' : '休憩を開始しました。';
+    audioReady.then((ready) => {
+      if (run !== startedRun || run.status !== 'running' || run.row !== 0 || run.looping) return;
+      if (ready) playSound(startedRun.phase);
+      else $('status').textContent = '音を準備できませんでした。タイマーは続行中です。';
+    });
   } else if (run.status === 'running') {
     handleEvent(pauseRun(run, Date.now()));
     $('status').textContent = '一時停止しました。';
   } else {
-    await prepareAudio();
+    void prepareAudio();
     resumeRun(run, Date.now());
     $('status').textContent = '再開しました。';
   }
@@ -268,22 +277,15 @@ $('end').addEventListener('click', () => {
 
 $('permission').addEventListener('click', async () => {
   if (!('Notification' in window)) {
-    $('status').textContent = 'この環境では通知を利用できません。';
+    $('permission-status').textContent = 'この環境では通知を利用できません。';
     return;
   }
   try {
     const permission = await Notification.requestPermission();
-    $('status').textContent = permission === 'granted' ? '通知を許可しました。' : '通知は許可されていません。';
+    $('permission-status').textContent = permission === 'granted' ? '通知を許可しました。' : '通知は許可されていません。';
   } catch {
-    $('status').textContent = '通知の許可を確認できませんでした。';
+    $('permission-status').textContent = '通知の許可を確認できませんでした。';
   }
-});
-
-$('sound-test').addEventListener('click', async () => {
-  await prepareAudio();
-  playSound('work');
-  setTimeout(() => playSound('rest'), 1300);
-  $('status').textContent = '作業開始音のあとに休憩開始音を鳴らします。';
 });
 
 addEventListener('beforeunload', () => {

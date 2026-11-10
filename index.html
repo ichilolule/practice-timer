@@ -11,7 +11,7 @@
 <body>
   <main class="app">
     <header>
-      <h1>練習タイマー</h1>
+      <h1>練習タイマー <span class="beta">beta</span></h1>
       <button id="settings-toggle" type="button">設定</button>
     </header>
 
@@ -28,10 +28,6 @@
       <p id="total" class="subtle"></p>
       <h2>設定した流れ</h2>
       <ol id="flow"></ol>
-      <div class="utility">
-        <button id="permission" type="button">通知を許可</button>
-        <button id="sound-test" type="button">音を試す</button>
-      </div>
     </section>
 
     <section id="settings-view" aria-label="手順の設定" hidden>
@@ -43,6 +39,8 @@
         <button id="save-settings" type="button">保存</button>
         <button id="cancel-settings" type="button">戻る</button>
       </div>
+      <button id="permission" type="button">通知を許可</button>
+      <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
       <p id="settings-error" role="alert"></p>
     </section>
   </main>

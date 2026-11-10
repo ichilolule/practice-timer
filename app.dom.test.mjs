@@ -36,6 +36,8 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   assert.match(html, /<script defer src="timer-core\.js"><\/script>/);
   assert.match(html, /<script defer src="app\.js"><\/script>/);
   assert.doesNotMatch(html, /type="module"/);
+  assert.match(html, /class="beta">beta<\/span>/);
+  assert.doesNotMatch(html, /id="sound-test"/);
 
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map((match) => [match[1], new Element()]));
   const document = {
@@ -59,6 +61,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   vm.runInContext(readFileSync(new URL('./app.js', import.meta.url), 'utf8'), context);
 
   assert.equal(elements.get('settings-view').hidden, false);
+  assert.equal(elements.get('permission').hidden, false);
   await elements.get('add-step').trigger('click');
   const workRow = elements.get('step-list').children[0];
   const workType = workRow.querySelector('select');
@@ -80,9 +83,14 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   await elements.get('save-settings').trigger('click');
   assert.equal(elements.get('timer-view').hidden, false);
   assert.equal(elements.get('main-action').disabled, false);
-  await elements.get('main-action').trigger('click');
+  const startClick = elements.get('main-action').trigger('click');
   assert.equal(elements.get('phase-name').textContent, '作業');
   assert.equal(elements.get('main-action').textContent, '一時停止');
+  const pauseClick = elements.get('main-action').trigger('click');
+  assert.equal(elements.get('main-action').textContent, '再開');
+  const resumeClick = elements.get('main-action').trigger('click');
+  assert.equal(elements.get('main-action').textContent, '一時停止');
+  await Promise.all([startClick, pauseClick, resumeClick]);
   await elements.get('skip').trigger('click');
   assert.equal(elements.get('phase-name').textContent, '休憩');
   assert.ok(storage.has('practice-timer-v1'));
