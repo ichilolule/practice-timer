@@ -47,20 +47,18 @@
         <button id="end" class="icon-button" type="button" aria-label="終了して記録" title="終了して記録" hidden><svg class="icon" aria-hidden="true"><use href="#icon-stop"/></svg></button>
       </div>
       <p id="status" role="status" aria-live="polite"></p>
-      </div>
-      <div id="active-task-panel">
-        <h2 class="sr-only">この回のタスク</h2>
+      <div class="active-task-summary">
+        <h2 class="sr-only">この回のタスクとメモ</h2>
         <p id="active-task-name" hidden></p>
         <p id="active-task-hint" class="subtle" hidden></p>
+      </div>
+      </div>
+      <div id="active-task-panel">
         <ul id="task-picker-list" class="item-list" aria-label="この回のタスクを選ぶ"></ul>
-        <details id="timer-task-add" class="task-add-details">
-        <summary aria-label="タスクを追加" title="タスクを追加"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg></summary>
         <form id="timer-quick-task-form" class="inline-form">
-          <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="やりたいことを入力" aria-label="新しいタスクのやりたいこと" required>
-          <button type="submit">＋追加</button>
+          <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="タスクを追加" aria-label="新しいタスクのやりたいこと" required>
+          <button type="submit" aria-label="タスクを追加">＋</button>
         </form>
-          <button id="timer-task-details-add" class="quiet-button" type="button">詳細をつける</button>
-        </details>
       </div>
       </div>
     </section>
@@ -183,14 +181,13 @@
       <h2 id="task-dialog-title">タスクを追加</h2>
       <form id="task-form">
         <label>やりたいこと <input id="task-title" type="text" maxlength="100" required></label>
-        <label>最初の一手 <textarea id="task-first-step" rows="2" maxlength="500"></textarea></label>
+        <label>メモ <textarea id="task-first-step" rows="2" maxlength="500"></textarea></label>
         <div class="category-fields">
           <label>テーマ <select id="task-group"></select></label>
           <label>サブテーマ <select id="task-child"></select></label>
         </div>
         <div class="task-actions">
           <button id="task-save" type="submit">保存</button>
-          <button id="task-save-only" type="button" hidden>リストに追加だけ</button>
           <button id="task-cancel" type="button">キャンセル</button>
         </div>
       </form>

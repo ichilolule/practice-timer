@@ -21,7 +21,8 @@ let groups = [];
 let sessions = [];
 let selectedTaskId = null;
 let editingTaskId = null;
-let taskEditorSelectAfter = false;
+let taskDrag = null;
+let taskPickerScrollTop = 0;
 let taskEditorSource = null;
 let taskUndo = null;
 let periodKind = 'day';
@@ -128,7 +129,10 @@ function renderTaskChoice() {
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;
+  const hideList = Boolean(run && selectedTaskId);
   renderTaskPicker();
+  $('active-task-panel').hidden = hideList;
+  if (!hideList) $('task-picker-list').scrollTop = taskPickerScrollTop;
 }
 
 function chooseTask(task) {
@@ -140,8 +144,10 @@ function chooseTask(task) {
 }
 
 function renderTaskPicker() {
+  cancelTaskDrag();
   const list = $('task-picker-list');
-  const scrollTop = list.scrollTop;
+  const scrollTop = $('active-task-panel').hidden ? taskPickerScrollTop : list.scrollTop;
+  taskPickerScrollTop = scrollTop;
   list.replaceChildren();
   const available = tasks.filter((task) => task.completedAt == null);
   if (!available.length) {
@@ -155,13 +161,17 @@ function renderTaskPicker() {
     choose.className = 'task-pick';
     choose.setAttribute('aria-pressed', String(task.id === selectedTaskId));
     choose.disabled = Boolean(run && selectedTaskId);
-    item.append(choose);
+    item.className = 'task-pick-row';
+    item.setAttribute('data-task-id', task.id);
+    choose.title = task.title;
+    item.append(choose, taskDragHandle(task, item, 'task-picker-list'));
     list.append(item);
   }
   list.scrollTop = scrollTop;
 }
 
 function switchView(name) {
+  cancelTaskDrag();
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) $(`${view}-view`).hidden = view !== name;
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) {
     const button = view === 'settings' ? $('settings-toggle') : $(`nav-${view}`);
@@ -248,7 +258,6 @@ function renderSettings() {
 function resetTaskForm() {
   if ($('task-dialog').open) $('task-dialog').close();
   editingTaskId = null;
-  taskEditorSelectAfter = false;
   taskEditorSource = null;
   $('task-title').value = '';
   $('task-first-step').value = '';
@@ -274,10 +283,9 @@ function renderTaskChildren(selected = '') {
   select.disabled = !group || !group.children.length;
 }
 
-function openTaskEditor(task = null, selectAfter = false, source = null) {
+function openTaskEditor(task = null, source = null) {
   resetTaskForm();
   editingTaskId = task?.id || null;
-  taskEditorSelectAfter = !task && selectAfter && Boolean(run && !selectedTaskId);
   taskEditorSource = source;
   $('task-title').value = task?.title || (source ? $(source).value.trim() : '');
   $('task-first-step').value = task?.firstStep || '';
@@ -289,13 +297,12 @@ function openTaskEditor(task = null, selectAfter = false, source = null) {
   groupSelect.value = groupId;
   renderTaskChildren(childId);
   $('task-dialog-title').textContent = task ? 'タスクを編集' : 'タスクを追加';
-  $('task-save').textContent = task ? '変更を保存' : taskEditorSelectAfter ? '追加してこの回に選ぶ' : '追加';
-  $('task-save-only').hidden = !taskEditorSelectAfter;
+  $('task-save').textContent = task ? '変更を保存' : '追加';
   $('task-dialog').showModal();
   $('task-title').focus();
 }
 
-function saveTask(selectAfter) {
+function saveTask() {
   const title = $('task-title').value.trim();
   if (!title) return;
   const firstStep = $('task-first-step').value.trim();
@@ -310,14 +317,12 @@ function saveTask(selectAfter) {
     task = { id: newId(), title, firstStep, targetId, completedAt: null };
     tasks.push(task);
   }
-  if (selectAfter && run && !selectedTaskId) selectedTaskId = task.id;
   if (taskEditorSource) $(taskEditorSource).value = '';
   persist();
   resetTaskForm();
   renderTasks();
   renderTaskChoice();
-  const message = updating ? 'タスクを更新しました。' : selectedTaskId === task.id && selectAfter
-    ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
+  const message = updating ? 'タスクを更新しました。' : 'タスクを追加しました。';
   $('task-status').textContent = message;
   if (!$('tasks-view').hidden) document.getElementById(`task-title-${task.id}`)?.focus();
   else if (!$('timer-view').hidden) $('main-action').focus();
@@ -326,14 +331,14 @@ function saveTask(selectAfter) {
 function addQuickTask(title, selectAfter = false) {
   const task = { id: newId(), title, firstStep: '', targetId: null, completedAt: null };
   tasks.push(task);
-  if (selectAfter && run && !selectedTaskId) selectedTaskId = task.id;
+  if (selectAfter && !(run && selectedTaskId)) selectedTaskId = task.id;
   persist();
   renderTasks();
   renderTaskChoice();
   const message = selectedTaskId === task.id
     ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
   $('task-status').textContent = message;
-  if (!$('timer-view').hidden && run && selectedTaskId === task.id) $('main-action').focus();
+  if (!$('timer-view').hidden && selectedTaskId === task.id) $('main-action').focus();
 }
 
 function setTaskCompleted(task, completed) {
@@ -370,7 +375,7 @@ function taskRow(task, completed) {
   content.className = 'task-detail-content';
   if (task.firstStep) {
     const firstStep = document.createElement('p');
-    firstStep.textContent = `最初の一手：${task.firstStep}`;
+    firstStep.textContent = `メモ：${task.firstStep}`;
     content.append(firstStep);
   }
   const target = targetLabel(groups, task.targetId);
@@ -411,10 +416,117 @@ function taskRow(task, completed) {
   content.append(actions, menu);
   details.append(title, content);
   item.append(checkLabel, details);
+  if (!completed) {
+    item.setAttribute('data-task-id', task.id);
+    item.append(taskDragHandle(task, item, 'task-list'));
+  }
   return item;
 }
 
+function moveTask(id, targetId, after, listId) {
+  if (id === targetId) return;
+  const task = tasks.find((item) => item.id === id && item.completedAt == null);
+  const target = tasks.find((item) => item.id === targetId && item.completedAt == null);
+  if (!task || !target) return;
+  tasks.splice(tasks.indexOf(task), 1);
+  tasks.splice(tasks.indexOf(target) + Number(after), 0, task);
+  persist();
+  renderTasks();
+  renderTaskChoice();
+  const handleId = `${listId}-drag-${id}`;
+  document.getElementById(handleId)?.focus({ preventScroll: true });
+  $('task-status').textContent = `「${task.title}」の順序を変更しました。`;
+}
+
+function cancelTaskDrag() {
+  const drag = taskDrag;
+  if (!drag) return;
+  taskDrag = null;
+  globalThis.cancelAnimationFrame?.(drag.frame);
+  drag.row.classList.toggle('task-dragging', false);
+  drag.target?.classList.toggle('task-drop-before', false);
+  drag.target?.classList.toggle('task-drop-after', false);
+  if (drag.handle.hasPointerCapture?.(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+}
+
+function updateTaskDrop(drag) {
+  drag.target?.classList.toggle('task-drop-before', false);
+  drag.target?.classList.toggle('task-drop-after', false);
+  const target = document.elementFromPoint(drag.x, drag.y)?.closest('[data-task-id]');
+  drag.target = target?.parentElement === drag.list && target !== drag.row ? target : null;
+  if (!drag.target) return;
+  const bounds = drag.target.getBoundingClientRect();
+  drag.after = drag.y >= bounds.top + bounds.height / 2;
+  drag.target.classList.toggle(drag.after ? 'task-drop-after' : 'task-drop-before', true);
+}
+
+function taskDragHandle(task, row, listId) {
+  const handle = document.createElement('button');
+  handle.type = 'button';
+  handle.id = `${listId}-drag-${task.id}`;
+  handle.className = 'task-drag-handle';
+  handle.textContent = '⠿';
+  handle.setAttribute('aria-label', `${task.title}を並べ替え（ドラッグまたは上下キー）`);
+  handle.title = 'ドラッグで並べ替え';
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const active = tasks.filter((item) => item.completedAt == null);
+    const direction = event.key === 'ArrowUp' ? -1 : 1;
+    const target = active[active.indexOf(task) + direction];
+    if (target) moveTask(task.id, target.id, direction > 0, listId);
+  });
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    cancelTaskDrag();
+    taskDrag = { handle, row, list: $(listId), id: task.id, pointerId: event.pointerId,
+      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, active: false };
+    handle.setPointerCapture(event.pointerId);
+  });
+  handle.addEventListener('pointermove', (event) => {
+    const drag = taskDrag;
+    if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    if (!drag.active && Math.hypot(drag.x - drag.startX, drag.y - drag.startY) < 6) return;
+    event.preventDefault();
+    if (!drag.active) {
+      drag.active = true;
+      row.classList.toggle('task-dragging', true);
+      const scroll = () => {
+        if (taskDrag !== drag) return;
+        const bounds = drag.list.getBoundingClientRect();
+        if (drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top && drag.y <= bounds.bottom) {
+          if (drag.y < bounds.top + 32) drag.list.scrollTop -= 12;
+          else if (drag.y > bounds.bottom - 32) drag.list.scrollTop += 12;
+        }
+        updateTaskDrop(drag);
+        drag.frame = globalThis.requestAnimationFrame?.(scroll);
+      };
+      drag.frame = globalThis.requestAnimationFrame?.(scroll);
+    }
+    updateTaskDrop(drag);
+  });
+  handle.addEventListener('pointerup', (event) => {
+    const drag = taskDrag;
+    if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
+    if (drag.active) {
+      drag.x = event.clientX;
+      drag.y = event.clientY;
+      updateTaskDrop(drag);
+    }
+    const targetId = drag.active ? drag.target?.getAttribute('data-task-id') : null;
+    cancelTaskDrag();
+    if (targetId) moveTask(drag.id, targetId, drag.after, listId);
+  });
+  for (const type of ['pointercancel', 'lostpointercapture']) handle.addEventListener(type, () => {
+    if (taskDrag?.handle === handle) cancelTaskDrag();
+  });
+  return handle;
+}
+
 function renderTasks() {
+  cancelTaskDrag();
   const active = tasks.filter((task) => task.completedAt == null);
   const completed = tasks.filter((task) => task.completedAt != null)
     .sort((a, b) => b.completedAt - a.completedAt);
@@ -1156,8 +1268,7 @@ $('timer-quick-task-form').addEventListener('submit', (event) => {
   addQuickTask(title, true);
   input.value = '';
 });
-$('timer-task-details-add').addEventListener('click', () => openTaskEditor(null, true, 'timer-quick-task-title'));
-$('task-details-add').addEventListener('click', () => openTaskEditor(null, false, 'quick-task-title'));
+$('task-details-add').addEventListener('click', () => openTaskEditor(null, 'quick-task-title'));
 $('task-undo').addEventListener('click', () => {
   const task = tasks.find((item) => item.id === taskUndo?.taskId);
   if (!task || task.completedAt !== taskUndo.completedAt) return;
@@ -1182,9 +1293,8 @@ $('quick-task-form').addEventListener('submit', (event) => {
 });
 $('task-form').addEventListener('submit', (event) => {
   event.preventDefault();
-  saveTask(taskEditorSelectAfter);
+  saveTask();
 });
-$('task-save-only').addEventListener('click', () => saveTask(false));
 $('task-cancel').addEventListener('click', resetTaskForm);
 $('group-form').addEventListener('submit', (event) => {
   event.preventDefault();

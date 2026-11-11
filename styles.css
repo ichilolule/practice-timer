@@ -41,19 +41,22 @@ p { line-height: 1.5; }
 .subtle { color: #626a77; font-size: .9rem; }
 #step-list { padding-left: 25px; }
 #active-task-panel { grid-area: tasks; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 0 0; }
-#active-task-panel h2 { margin: 0; }
-#active-task-name { flex-shrink: 0; max-height: 3em; overflow: auto; margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
-#active-task-hint { flex-shrink: 0; max-height: 4.5em; overflow: auto; margin: 0; overflow-wrap: anywhere; }
+.active-task-summary { margin-top: 20px; text-align: center; }
+.active-task-summary h2 { margin: 0; }
+.active-task-summary:has(#active-task-name[hidden]) { display: none; }
+#active-task-name { max-height: 3em; overflow: auto; margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+#active-task-hint { max-height: 4.5em; white-space: pre-wrap; overflow: auto; margin: 0; overflow-wrap: anywhere; }
 .task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.task-add-details { flex-shrink: 0; margin: 0; }
-.task-add-details > summary { display: grid; place-items: center; list-style: none; width: 44px; min-height: 44px; margin: 0; }
-.task-add-details > summary::-webkit-details-marker { display: none; }
-.task-add-details > summary, #completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
+#timer-quick-task-form { flex-shrink: 0; flex-wrap: nowrap; margin: 0; }
+#timer-quick-task-title { flex: 1; width: 0; }
+#timer-quick-task-form button { padding: 9px; }
+#completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
 .quiet-button { border-color: transparent; color: #4e5d74; background: transparent; }
 #task-form { display: grid; gap: 12px; }
 #task-form label { display: grid; gap: 5px; }
 #task-form input, #task-form textarea, #task-form select, .inline-form input, .record-row input, .record-row select { padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
-#quick-task-title, #timer-quick-task-title { flex: 1 1 240px; min-width: 0; }
+#quick-task-title { flex: 1 1 240px; min-width: 0; }
+#timer-quick-task-title { min-width: 0; }
 .category-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .category-fields select { width: 100%; }
 dialog { width: min(600px, calc(100% - 30px)); max-height: min(85vh, 800px); overflow: auto; padding: 22px; border: 1px solid #abb1bd; border-radius: 12px; color: inherit; background: white; box-shadow: 0 12px 40px #24283229; }
@@ -75,7 +78,14 @@ dialog h2 { margin-top: 0; }
 .task-menu { margin-top: 8px; }
 .task-menu > summary { color: #626a77; font-size: .9rem; width: fit-content; }
 .task-menu button { color: #a32222; }
-.task-pick { display: block; width: 100%; border: 0; text-align: left; overflow-wrap: anywhere; }
+.task-pick-row { display: flex; align-items: center; }
+.task-pick { display: block; flex: 1; min-width: 0; width: 100%; border: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-drag-handle { flex: 0 0 32px; min-width: 32px; padding: 8px 2px; border: 0; background: transparent; color: #626a77; cursor: grab; touch-action: none; user-select: none; }
+.task-drag-handle:active { cursor: grabbing; }
+.task-dragging { opacity: .45; }
+.task-drop-before { box-shadow: 0 -3px #526f9e; }
+.task-drop-after { box-shadow: 0 3px #526f9e; }
+.task-detail-content p { white-space: pre-wrap; }
 .task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .task-feedback p:empty { display: none; }
 .group-card button { margin-right: 5px; }
@@ -183,9 +193,9 @@ dialog h2 { margin-top: 0; }
 #sound-status { color: #a32222; }
 #sound-status:empty, #settings-error:empty { display: none; }
 [hidden] { display: none !important; }
-/* 左右に約320pxずつ確保できる幅から横並びにする。 */
+/* 横幅を基準に、一覧1/3・タイマー2/3で並べる。 */
 @media (min-width: 720px) {
-  .timer-layout { grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; height: calc(100vh - 108px - env(safe-area-inset-bottom)); height: calc(100dvh - 108px - env(safe-area-inset-bottom)); min-height: 280px; align-content: stretch; }
+  .timer-layout { grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 24px; height: calc(100vh - 108px - env(safe-area-inset-bottom)); height: calc(100dvh - 108px - env(safe-area-inset-bottom)); min-height: 280px; align-content: stretch; }
   #active-task-panel { height: 100%; padding: 0; }
   #task-picker-list { max-height: none; }
   #clock { font-size: clamp(2rem, min(12vw, 22vh), 5.5rem); }
