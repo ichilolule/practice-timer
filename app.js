@@ -593,7 +593,6 @@ function renderTasks() {
   const active = tasks.filter((task) => task.completedAt == null);
   const completed = tasks.filter((task) => task.completedAt != null)
     .sort((a, b) => b.completedAt - a.completedAt);
-  $('active-count').textContent = `(${active.length})`;
   $('completed-count').textContent = `(${completed.length})`;
   const activeList = $('task-list');
   const completedList = $('completed-list');

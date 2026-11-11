@@ -51,6 +51,7 @@ p { line-height: 1.5; }
 #timer-quick-task-title { flex: 1; width: 0; }
 #timer-quick-task-form button { padding: 9px; }
 #completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
+#quick-task-form { position: sticky; top: 0; z-index: 5; margin: 0; padding: 12px 0; border-bottom: 1px solid #dde1e8; background: white; }
 .quiet-button { border-color: transparent; color: #4e5d74; background: transparent; }
 #task-form { display: grid; gap: 12px; }
 #task-form label { display: grid; gap: 5px; }

@@ -72,14 +72,13 @@
 
     <section id="tasks-view" aria-label="タスク" hidden>
       <form id="quick-task-form" class="inline-form">
-        <input id="quick-task-title" type="text" maxlength="100" placeholder="やりたいことを入力" aria-label="やりたいこと" required>
+        <input id="quick-task-title" type="text" maxlength="100" placeholder="タスクを追加" aria-label="タスクを追加" required>
         <button type="submit">＋追加</button>
         <button id="task-details-add" class="quiet-button" type="button">詳細をつける</button>
       </form>
       <div class="task-feedback">
         <p id="task-status" class="sr-only" role="status" aria-live="polite"></p>
       </div>
-      <h3>未完了 <span id="active-count"></span></h3>
       <ul id="task-list" class="item-list"></ul>
       <details id="completed-section">
         <summary>完了済み <span id="completed-count"></span></summary>

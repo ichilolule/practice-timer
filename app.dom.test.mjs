@@ -435,12 +435,12 @@ test('既存タスクを保ち、完了済みへ退避して戻せる', async ()
   })]]);
   const { elements } = mount(storage);
   await elements.get('nav-tasks').trigger('click');
-  assert.equal(elements.get('active-count').textContent, '(1)');
+  assert.equal(elements.get('task-list').children.filter((row) => row.querySelector('input')).length, 1);
   const oldTask = elements.get('task-list').children[0];
   oldTask.querySelector('input').checked = true;
   await oldTask.querySelector('input').trigger('change');
   let saved = JSON.parse(storage.get('practice-timer-v1'));
-  assert.equal(elements.get('active-count').textContent, '(0)');
+  assert.equal(elements.get('task-list').children.filter((row) => row.querySelector('input')).length, 0);
   assert.equal(elements.get('completed-count').textContent, '(1)');
   assert.equal(typeof saved.tasks[0].completedAt, 'number');
   assert.equal(saved.sessions[0].taskId, 'old-task');
@@ -453,7 +453,7 @@ test('既存タスクを保ち、完了済みへ退避して戻せる', async ()
   await completedCheck.trigger('change');
   saved = JSON.parse(storage.get('practice-timer-v1'));
   assert.equal(saved.tasks[0].completedAt, null);
-  assert.equal(reopened.elements.get('active-count').textContent, '(1)');
+  assert.equal(reopened.elements.get('task-list').children.filter((row) => row.querySelector('input')).length, 1);
 
   reopened.elements.get('quick-task-title').value = '配色を試す';
   await reopened.elements.get('quick-task-form').trigger('submit');
