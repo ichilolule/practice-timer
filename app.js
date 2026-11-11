@@ -264,7 +264,7 @@ function renderTaskChildren(selected = '') {
   const group = groups.find((item) => item.id === $('task-group').value);
   const select = $('task-child');
   select.replaceChildren();
-  appendOption(select, '', group ? '小分類なし（大分類へ加算）' : '大分類を先に選択');
+  appendOption(select, '', group ? 'サブテーマなし' : 'テーマを選択');
   for (const child of group?.children || []) appendOption(select, child.id, child.title);
   select.value = group?.children.some((child) => child.id === selected) ? selected : '';
   select.disabled = !group || !group.children.length;
@@ -280,7 +280,7 @@ function openTaskEditor(task = null, selectAfter = false, source = null) {
   const { groupId, childId } = taskTargetParts(task?.targetId);
   const groupSelect = $('task-group');
   groupSelect.replaceChildren();
-  appendOption(groupSelect, '', '未分類');
+  appendOption(groupSelect, '', '未設定');
   for (const group of groups) appendOption(groupSelect, group.id, group.title);
   groupSelect.value = groupId;
   renderTaskChildren(childId);
@@ -373,7 +373,7 @@ function taskRow(task, completed) {
   if (target) {
     const category = document.createElement('p');
     category.className = 'subtle';
-    category.textContent = `加算先：${target}`;
+    category.textContent = `テーマ：${target}`;
     content.append(category);
   }
   if (completed) {
@@ -448,7 +448,7 @@ function renameItem(item, label) {
 
 function removeGroup(group, child = null) {
   const label = child?.title || group.title;
-  if (!confirm(`「${label}」を削除しますか？ここに積んだ時間は未分類に戻ります。`)) return;
+  if (!confirm(`「${label}」を削除しますか？記録のテーマは未設定になります。`)) return;
   const removedIds = child ? [child.id] : [group.id, ...group.children.map((item) => item.id)];
   clearTargets(removedIds, tasks, sessions);
   if (child) group.children = group.children.filter((item) => item.id !== child.id);
@@ -582,13 +582,13 @@ function renderGrowth() {
       const list = document.createElement('ul');
       list.className = 'growth-children';
       for (const child of children) list.append(growthLine(child.title, child.totalMs, 'li'));
-      if (group.directMs > 0) list.append(growthLine('内訳なし', group.directMs, 'li'));
+      if (group.directMs > 0) list.append(growthLine('サブテーマなし', group.directMs, 'li'));
       section.append(list);
     }
     breakdown.append(section);
   }
   if (unclassifiedMs > 0) {
-    const row = growthLine('加算先なし', unclassifiedMs);
+    const row = growthLine('未設定', unclassifiedMs);
     row.className += ' growth-group';
     breakdown.append(row);
   }
@@ -605,7 +605,7 @@ function renderGrowth() {
   groupList.replaceChildren();
   if (!groups.length) {
     const empty = document.createElement('p');
-    empty.textContent = '育成項目はまだありません。「＋育成項目」から作れます。';
+    empty.textContent = 'テーマはまだありません。「＋テーマ」から作れます。';
     groupList.append(empty);
   }
   for (const group of summary.groups) {
@@ -616,9 +616,9 @@ function renderGrowth() {
     heading.textContent = `${group.title}　合計 ${durationText(group.totalMs)}`;
     const direct = document.createElement('p');
     direct.className = 'subtle';
-    direct.textContent = `内訳なし ${durationText(group.directMs)}`;
+    direct.textContent = `サブテーマなし ${durationText(group.directMs)}`;
     card.append(heading, direct,
-      rowButton('名前変更', `${group.title}の名前を変更`, () => renameItem(original, '育成項目')),
+      rowButton('名前変更', `${group.title}の名前を変更`, () => renameItem(original, 'テーマ')),
       rowButton('削除', `${group.title}を削除`, () => removeGroup(original)));
     const children = document.createElement('ul');
     for (const child of group.children) {
@@ -627,7 +627,7 @@ function renderGrowth() {
       const label = document.createElement('span');
       label.textContent = `${child.title} ${durationText(child.totalMs)}`;
       item.append(label,
-        rowButton('名前変更', `${child.title}の名前を変更`, () => renameItem(originalChild, '内訳')),
+        rowButton('名前変更', `${child.title}の名前を変更`, () => renameItem(originalChild, 'サブテーマ')),
         rowButton('削除', `${child.title}を削除`, () => removeGroup(original, originalChild)));
       children.append(item);
     }
@@ -639,10 +639,10 @@ function renderGrowth() {
     input.maxLength = 60;
     input.required = true;
     input.placeholder = '例：手';
-    input.setAttribute('aria-label', `${group.title}の内訳名`);
+    input.setAttribute('aria-label', `${group.title}のサブテーマ名`);
     const add = document.createElement('button');
     add.type = 'submit';
-    add.textContent = '＋内訳';
+    add.textContent = '＋サブテーマ';
     form.append(input, add);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -684,7 +684,7 @@ function renderDayRecords(bounds) {
     range.className = 'record-range';
     range.textContent = `${session.startedAt == null ? '開始時刻なし' : recordTimeLabel(session.startedAt, bounds)} ～ ${recordTimeLabel(session.endedAt, bounds)}`;
     const target = document.createElement('span');
-    target.textContent = targetLabel(groups, session.targetId) || '加算先なし';
+    target.textContent = targetLabel(groups, session.targetId) || '未設定';
     detail.append(range, target);
     row.append(heading, detail,
       rowButton('修正・削除', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session)));
@@ -692,7 +692,7 @@ function renderDayRecords(bounds) {
   }
   if (!records.length) {
     const empty = document.createElement('p');
-    empty.textContent = unclassifiedOnly ? '加算先のない記録はありません。' : 'この日の記録はありません。';
+    empty.textContent = unclassifiedOnly ? 'テーマが未設定の記録はありません。' : 'この日の記録はありません。';
     list.append(empty);
   }
 }
@@ -701,7 +701,7 @@ function renderRecordChildren(selected = '') {
   const group = groups.find((item) => item.id === $('record-group').value);
   const select = $('record-child');
   select.replaceChildren();
-  appendOption(select, '', group ? '小分類なし（大分類へ加算）' : '大分類を先に選択');
+  appendOption(select, '', group ? 'サブテーマなし' : 'テーマを選択');
   for (const child of group?.children || []) appendOption(select, child.id, child.title);
   select.value = group?.children.some((child) => child.id === selected) ? selected : '';
   select.disabled = !group || !group.children.length;
@@ -710,7 +710,7 @@ function renderRecordChildren(selected = '') {
 function setRecordTarget(targetId) {
   const { groupId, childId } = taskTargetParts(targetId);
   $('record-group').replaceChildren();
-  appendOption($('record-group'), '', '未分類');
+  appendOption($('record-group'), '', '未設定');
   for (const group of groups) appendOption($('record-group'), group.id, group.title);
   $('record-group').value = groupId;
   renderRecordChildren(childId);
@@ -818,7 +818,7 @@ function validateBackup(raw) {
   const restoredGroups = raw.groups.map((group) => ({
     id: takeId(group.id), title: title(group.title, 60),
     children: (() => {
-      if (!Array.isArray(group.children)) throw new Error('内訳が不正です。');
+      if (!Array.isArray(group.children)) throw new Error('サブテーマが不正です。');
       return group.children.map((child) => ({ id: takeId(child.id), title: title(child.title, 60) }));
     })(),
   }));
@@ -1077,7 +1077,7 @@ $('group-form').addEventListener('submit', (event) => {
   $('group-form').reset();
   persist();
   renderGrowth();
-  $('growth-status').textContent = '育成項目を追加しました。';
+  $('growth-status').textContent = 'テーマを追加しました。';
 });
 for (const kind of ['day', 'week', 'month', 'year']) {
   $('period-' + kind).addEventListener('click', () => {

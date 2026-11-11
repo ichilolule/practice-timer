@@ -106,20 +106,20 @@
         <div id="period-chart" class="period-chart" role="group" aria-label="作業時間のグラフ"></div>
       </div>
       <p id="day-untimed" class="subtle" hidden></p>
-      <h3>育成項目の時間</h3>
+      <h3>テーマ別</h3>
       <div id="period-group-list"></div>
       <section id="day-records">
         <div class="day-record-heading">
           <h3>この日の記録 <span id="day-record-count"></span></h3>
-          <label><input id="unclassified-filter" type="checkbox"> 加算先なしのみ</label>
+          <label><input id="unclassified-filter" type="checkbox"> 未設定のみ</label>
         </div>
         <div id="record-list"></div>
       </section>
       <details id="growth-manage">
-        <summary>育成項目を管理</summary>
+        <summary>テーマを管理</summary>
         <form id="group-form" class="inline-form">
-          <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="育成項目の名前" required>
-          <button type="submit">＋育成項目</button>
+          <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="テーマの名前" required>
+          <button type="submit">＋テーマ</button>
         </form>
         <div id="group-list"></div>
       </details>
@@ -163,7 +163,7 @@
       <h2>バックアップ</h2>
       <button id="export-data" type="button">JSONを保存</button>
       <label class="import-label">JSONを読み込む <input id="import-file" type="file" accept=".json,application/json"></label>
-      <p class="subtle">読み込みは現在のタスク・時間・育成項目・各設定を置き換えます。計測中は読み込めません。</p>
+      <p class="subtle">読み込みは現在のタスク・時間・テーマ・各設定を置き換えます。計測中は読み込めません。</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
 
@@ -182,8 +182,8 @@
         <label>やりたいこと <input id="task-title" type="text" maxlength="100" required></label>
         <label>最初の一手 <textarea id="task-first-step" rows="2" maxlength="500"></textarea></label>
         <div class="category-fields">
-          <label>加算先の大分類 <select id="task-group"></select></label>
-          <label>小分類 <select id="task-child"></select></label>
+          <label>テーマ <select id="task-group"></select></label>
+          <label>サブテーマ <select id="task-child"></select></label>
         </div>
         <div class="task-actions">
           <button id="task-save" type="submit">保存</button>
@@ -200,8 +200,8 @@
         <label id="record-duration-label" hidden>作業時間（分） <input id="record-duration" type="number" min="0.01" step="any"></label>
         <label>タスク <select id="record-task"></select></label>
         <div class="category-fields">
-          <label>加算先の大分類 <select id="record-group"></select></label>
-          <label>小分類 <select id="record-child"></select></label>
+          <label>テーマ <select id="record-group"></select></label>
+          <label>サブテーマ <select id="record-child"></select></label>
         </div>
         <p id="record-error" role="alert"></p>
         <div class="task-actions">

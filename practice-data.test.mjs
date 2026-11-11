@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import data from './practice-data.js';
 
-test('内訳への20分は親に一度だけ集計する', () => {
+test('サブテーマへの20分はテーマに一度だけ集計する', () => {
   const groups = [{ id: 'body', title: '人体', children: [{ id: 'hand', title: '手' }] }];
   const sessions = [
     { id: 'a', workMs: 20 * 60000, targetId: 'hand' },
@@ -16,7 +16,7 @@ test('内訳への20分は親に一度だけ集計する', () => {
   assert.deepEqual(summary.unclassified.map((item) => item.id), ['c']);
 });
 
-test('加算先削除では記録を未分類へ戻す', () => {
+test('テーマ削除では記録のテーマを未設定へ戻す', () => {
   const groups = [{ id: 'body', title: '人体', children: [{ id: 'hand', title: '手' }] }];
   const task = { id: 'task', title: '手を描く', targetId: 'hand' };
   const session = { workMs: 60000, taskId: 'task', taskTitle: '手を描く', targetId: 'hand' };

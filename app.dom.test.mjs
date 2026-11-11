@@ -542,7 +542,7 @@ test('開始前に選んだタスクを選び直せて、再読み込みと開�
   assert.equal(elements.get('task-undo').hidden, true);
 });
 
-test('タイマー画面から二段階の加算先で追加し、この回に選べる', async () => {
+test('タイマー画面からテーマとサブテーマを設定して追加し、この回に選べる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
   })]]);
@@ -630,7 +630,7 @@ test('タイトル中心の詳細からタスクを選び、入力中のタイ�
     JSON.parse(storage.get('practice-timer-v1')).tasks[0].id);
 });
 
-test('既存タイマーの累計は未分類記録として一度だけ引き継ぐ', async () => {
+test('既存タイマーの累計はテーマ未設定の記録として一度だけ引き継ぐ', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 5 }, { type: 'rest', minutes: 3 }], totalWorkMs: 120000,
   })]]);
@@ -669,7 +669,7 @@ test('積み上げは時間と分で表示し、親子の内訳を分けて秒�
   const group = elements.get('period-group-list').children[0];
   assert.deepEqual(group.children[0].children.map((item) => item.textContent), ['人体', '01:00']);
   assert.deepEqual(group.children[1].children.map((row) => row.children.map((item) => item.textContent)),
-    [['手', '00:25'], ['内訳なし', '00:34']]);
+    [['手', '00:25'], ['サブテーマなし', '00:34']]);
   const records = elements.get('record-list').children;
   assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '00:25']);
   assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
