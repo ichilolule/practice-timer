@@ -106,7 +106,7 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   const app = mount(new Map(), audio.AudioContext);
   const { elements } = app;
   await elements.get('settings-toggle').trigger('click');
-  elements.get('sound-volume').value = '50';
+  elements.get('sound-volume').value = '10';
   await elements.get('sound-volume').trigger('input');
   await elements.get('sound-volume').trigger('change');
   elements.get('sound-pitch').value = '12';
@@ -129,23 +129,24 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   assert.ok(audio.gains.every(events => events.every(event => event.value > 0)));
   const restored = mount(app.storage).elements;
   await restored.get('settings-toggle').trigger('click');
-  assert.equal(restored.get('sound-volume').value, '50');
+  assert.equal(restored.get('sound-volume').value, '10');
   assert.equal(restored.get('sound-pitch').value, '12');
   app.flushTimeouts();
-  elements.get('sound-volume').value = '300';
+  elements.get('sound-volume').value = '100';
   await elements.get('sound-volume').trigger('change');
   await elements.get('preview-work').trigger('click');
-  assert.equal(audio.gains[5][1].value, 0.48);
+  assert.equal(audio.gains[5][1].value, 0.8);
+  assert.ok(audio.gains[5][1].value < 1);
   const boosted = mount(app.storage).elements;
   await boosted.get('settings-toggle').trigger('click');
-  assert.equal(boosted.get('sound-volume').value, '300');
+  assert.equal(boosted.get('sound-volume').value, '100');
   await elements.get('export-data').trigger('click');
   const backup = JSON.parse(await app.exportedBlob.text());
-  assert.deepEqual(backup.sound, { volume: 300, pitch: 12 });
+  assert.deepEqual(backup.sound, { volume: 500, pitch: 12 });
   backup.sound = { volume: 35, pitch: -12 };
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
   await elements.get('import-file').trigger('change');
-  assert.equal(elements.get('sound-volume').value, '35');
+  assert.equal(elements.get('sound-volume').value, '7');
   assert.equal(elements.get('sound-pitch').value, '-12');
   assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '標準より12半音低い');
   const beforeInvalid = app.storage.get('practice-timer-v1');
@@ -153,7 +154,7 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
   assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
-  backup.sound = { volume: 301, pitch: 0 };
+  backup.sound = { volume: 501, pitch: 0 };
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
   assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
@@ -180,7 +181,7 @@ test('音量0は完全に消音し、音を準備できない環境でも計測�
   await muted.elements.get('settings-toggle').trigger('click');
   await muted.elements.get('preview-work').trigger('click');
   assert.equal(audio.notes.length, 0);
-  muted.elements.get('sound-volume').value = '50';
+  muted.elements.get('sound-volume').value = '10';
   await muted.elements.get('sound-volume').trigger('change');
   await muted.elements.get('skip').trigger('click');
   assert.equal(audio.notes.length, 2);
@@ -194,7 +195,7 @@ test('音の設定を含まない旧バックアップは標準音を使い、�
   })]]);
   const { elements } = mount(storage);
   await elements.get('settings-toggle').trigger('click');
-  assert.equal(elements.get('sound-volume').value, '100');
+  assert.equal(elements.get('sound-volume').value, '20');
   assert.equal(elements.get('sound-pitch').value, '0');
   await elements.get('preview-rest').trigger('click');
   assert.match(elements.get('sound-status').textContent, /音を再生できません/);
@@ -209,6 +210,24 @@ function buttonNamed(element, label) {
   }
   return null;
 }
+
+test('旧版の音量は同じ大きさで引き継ぎ、高さを変えても丸めない', async () => {
+  for (const [volume, displayed] of [[300, '60'], [99, '19.8']]) {
+    const storage = new Map([['practice-timer-v1', JSON.stringify({
+      format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [],
+      run: null, totalWorkMs: 0, selectedTaskId: null, sound: { volume, pitch: 0 },
+    })]]);
+    const audio = recordAudio();
+    const { elements } = mount(storage, audio.AudioContext);
+    await elements.get('settings-toggle').trigger('click');
+    assert.equal(elements.get('sound-volume').value, displayed);
+    elements.get('sound-pitch').value = '1';
+    await elements.get('sound-pitch').trigger('change');
+    assert.equal(JSON.parse(storage.get('practice-timer-v1')).sound.volume, volume);
+    await elements.get('preview-work').trigger('click');
+    assert.ok(Math.abs(audio.gains[0][1].value - 0.16 * volume / 100) < 1e-12);
+  }
+});
 
 test('下部の設定から別の画面へ移動しても入力を保ち、キャンセルで元に戻せる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({

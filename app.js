@@ -7,6 +7,8 @@ const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodB
 const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
 const DEFAULT_SOUND = { volume: 100, pitch: 0 };
+// 保存値の尺度は旧版のままにして、画面の1%を従来の5%分に対応させる。
+const SOUND_VOLUME_SCALE = 5;
 const $ = (id) => document.getElementById(id);
 let steps = [];
 let draft = [];
@@ -723,7 +725,7 @@ function deleteRecord(group) {
 
 function validateSound(raw) {
   if (raw == null) return { ...DEFAULT_SOUND };
-  if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 300 ||
+  if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 500 ||
       !Number.isInteger(raw.pitch) || raw.pitch < -12 || raw.pitch > 12) {
     throw new Error('音の設定が不正です。');
   }
@@ -856,10 +858,10 @@ function playSound(phase) {
 }
 
 function renderSoundSettings() {
-  $('sound-volume').value = String(soundSettings.volume);
+  const displayedVolume = soundSettings.volume / SOUND_VOLUME_SCALE;
+  $('sound-volume').value = String(displayedVolume);
   $('sound-pitch').value = String(soundSettings.pitch);
-  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0%（消音）'
-    : soundSettings.volume === 100 ? '100%（標準）' : `${soundSettings.volume}%`;
+  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0%（消音）' : `${displayedVolume}%`;
   $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? '標準'
     : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)}半音`;
   $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
@@ -868,8 +870,11 @@ function renderSoundSettings() {
   $('preview-work').disabled = $('preview-rest').disabled = previewPlaying || soundSettings.volume === 0;
 }
 
-function updateSoundSettings(save = false) {
-  soundSettings = validateSound({ volume: Number($('sound-volume').value), pitch: Number($('sound-pitch').value) });
+function updateSoundSettings(id, save = false) {
+  soundSettings = validateSound({ ...soundSettings,
+    ...(id === 'sound-volume' ? { volume: Math.round(Number($('sound-volume').value) * SOUND_VOLUME_SCALE) }
+      : { pitch: Number($('sound-pitch').value) }),
+  });
   renderSoundSettings();
   if (save) $('sound-status').textContent = persist() ? '' : '音の設定を保存できませんでした。';
   if (save && run && soundSettings.volume) {
@@ -920,8 +925,8 @@ function handleEvent(event) {
 
 $('settings-toggle').addEventListener('click', showSettings);
 for (const id of ['sound-volume', 'sound-pitch']) {
-  $(id).addEventListener('input', () => updateSoundSettings());
-  $(id).addEventListener('change', () => updateSoundSettings(true));
+  $(id).addEventListener('input', () => updateSoundSettings(id));
+  $(id).addEventListener('change', () => updateSoundSettings(id, true));
 }
 $('preview-work').addEventListener('click', () => previewSound('work'));
 $('preview-rest').addEventListener('click', () => previewSound('rest'));
