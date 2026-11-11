@@ -68,7 +68,6 @@
     </section>
 
     <section id="tasks-view" aria-label="タスク" hidden>
-      <h2>タスク</h2>
       <form id="quick-task-form" class="inline-form">
         <input id="quick-task-title" type="text" maxlength="100" placeholder="やりたいことを入力" aria-label="やりたいこと" required>
         <button type="submit">＋追加</button>
@@ -87,7 +86,6 @@
     </section>
 
     <section id="growth-view" aria-label="積み上げ" hidden>
-      <h2>積み上げ</h2>
       <div id="period-tabs" class="period-tabs" role="group" aria-label="集計期間">
         <button id="period-day" type="button">日</button>
         <button id="period-week" type="button">週</button>
@@ -100,11 +98,11 @@
         <button id="period-next" type="button" aria-label="次の期間">→</button>
       </div>
       <div class="growth-summary">
-        <p class="growth-period-total"><span class="sr-only">選択期間の作業時間（時間:分）</span><span id="growth-total"></span></p>
+        <p class="growth-period-total"><span class="sr-only">選択期間の作業時間（時間・分）</span><span id="growth-total"></span></p>
         <p id="growth-all-total" class="subtle"></p>
       </div>
       <div id="period-chart-layout" class="period-chart-layout">
-        <div class="period-axis" aria-hidden="true"><span id="period-chart-max"></span><span>00:00</span></div>
+        <div class="period-axis" aria-hidden="true"><span id="period-chart-max"></span><span>0h 00m</span></div>
         <div id="period-chart" class="period-chart" role="group" aria-label="作業時間のグラフ"></div>
       </div>
       <p id="day-untimed" class="subtle" hidden></p>
@@ -118,16 +116,6 @@
     </section>
 
     <section id="themes-view" aria-label="テーマ" hidden>
-      <div class="theme-heading">
-        <h2>テーマ</h2>
-        <details id="theme-add">
-          <summary>＋テーマ</summary>
-          <form id="group-form" class="inline-form">
-            <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="テーマの名前" required>
-            <button type="submit">追加</button>
-          </form>
-        </details>
-      </div>
       <div class="period-tabs theme-period-tabs" role="group" aria-label="テーマの集計期間">
         <button id="theme-period-day" type="button">日</button>
         <button id="theme-period-week" type="button">週</button>
@@ -143,6 +131,12 @@
       <div id="theme-scale" class="theme-scale" aria-hidden="true"><span>0h 00m</span><span id="theme-scale-max"></span></div>
       <div id="group-list"></div>
       <div id="theme-unset"></div>
+      <div id="theme-add" class="group-card">
+        <form id="group-form" class="inline-form">
+          <input id="group-title" type="text" maxlength="60" placeholder="テーマを追加" aria-label="テーマの名前" required>
+          <button type="submit">追加</button>
+        </form>
+      </div>
       <p id="growth-status" class="sr-only" role="status" aria-live="polite"></p>
     </section>
 

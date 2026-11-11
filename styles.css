@@ -50,7 +50,6 @@ p { line-height: 1.5; }
 .task-add-details > summary { display: grid; place-items: center; list-style: none; width: 44px; min-height: 44px; margin: auto; }
 .task-add-details > summary::-webkit-details-marker { display: none; }
 .task-add-details > summary, #completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
-#tasks-view > h2, #growth-view > h2 { margin-top: 0; }
 .quiet-button { border-color: transparent; color: #4e5d74; background: transparent; }
 #task-form { display: grid; gap: 12px; }
 #task-form label { display: grid; gap: 5px; }
@@ -109,9 +108,9 @@ dialog h2 { margin-top: 0; }
 .record-meta > span { min-width: 0; overflow-wrap: anywhere; }
 .record-day-marker { display: block; color: #626a77; font-size: .7rem; font-weight: 400; text-align: right; }
 #record-list .record-row > button { align-self: center; font-size: .85rem; }
-.theme-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; }
-#theme-add > summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
-#theme-add .inline-form { max-width: 360px; }
+#theme-add { display: flex; align-items: center; min-height: 78px; padding: 16px; }
+#theme-add .inline-form { width: 100%; margin: 0; }
+#theme-add button { margin: 0; }
 #theme-add input { min-width: 0; flex: 1 1 140px; }
 .theme-period-tabs button { font-size: .9rem; padding: 9px 6px; }
 #theme-period-label { flex: 1; }
@@ -144,6 +143,7 @@ dialog h2 { margin-top: 0; }
 #theme-name-error { color: #a32222; }
 #theme-name-error:empty { display: none; }
 #theme-unset { margin: 20px 36px 0 16px; }
+#theme-unset:empty { display: none; }
 #record-form { display: grid; gap: 12px; }
 #record-form label { display: grid; gap: 5px; }
 #record-form input, #record-form select { width: 100%; padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }

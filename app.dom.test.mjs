@@ -645,7 +645,7 @@ test('既存タイマーの累計はテーマ未設定の記録として一度�
   assert.equal(second.elements.get('record-list').children.length, 1);
 });
 
-test('積み上げとテーマの時間表示を分け、秒の精度を保持する', async () => {
+test('作業時間をh・m表記に統一し、秒の精度と開始・終了時刻を保持する', async () => {
   const start = new Date(1_000_000);
   start.setHours(10, 0, 0, 0);
   const sessions = [
@@ -664,8 +664,8 @@ test('積み上げとテーマの時間表示を分け、秒の精度を保持�
   });
   const { elements, storage } = mount(new Map([['practice-timer-v1', original]]), undefined, +start);
   await elements.get('nav-growth').trigger('click');
-  assert.equal(elements.get('growth-total').textContent, '01:00');
-  assert.equal(elements.get('growth-all-total').textContent, '全期間 126:30');
+  assert.equal(elements.get('growth-total').textContent, '1h 00m');
+  assert.equal(elements.get('growth-all-total').textContent, '全期間 126h 30m');
   await elements.get('nav-themes').trigger('click');
   await elements.get('theme-period-day').trigger('click');
   const group = elements.get('group-list').children[0];
@@ -676,12 +676,12 @@ test('積み上げとテーマの時間表示を分け、秒の精度を保持�
   assert.equal(group.children[1].children[1].textContent, 'サブテーマなし 0h 34m');
   await elements.get('nav-growth').trigger('click');
   const records = elements.get('record-list').children;
-  assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '00:25']);
+  assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '0h 25m']);
   assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
   assert.equal(records[0].children[1].children[1].textContent, '人体 → 手');
-  assert.equal(records[2].children[0].children[1].textContent, '00:00');
+  assert.equal(records[2].children[0].children[1].textContent, '0h 00m');
   await elements.get('period-next').trigger('click');
-  assert.equal(elements.get('growth-total').textContent, '125:30');
+  assert.equal(elements.get('growth-total').textContent, '125h 30m');
   const legacy = elements.get('record-list').children[0];
   assert.equal(legacy.children[1].children[0].textContent, '開始時刻なし ～ 10:00');
   assert.equal(storage.get('practice-timer-v1'), original);
@@ -788,12 +788,12 @@ test('日付をまたぐ記録は選択日以外の日付と当日分の時間�
   const { elements, storage } = mount(new Map([['practice-timer-v1', original]]));
   await elements.get('nav-growth').trigger('click');
   let row = elements.get('record-list').children[0];
-  assert.equal(row.children[0].children[1].textContent, '00:30');
+  assert.equal(row.children[0].children[1].textContent, '0h 30m');
   assert.equal(row.children[0].children[1].children[0].textContent, 'この日');
   assert.equal(row.children[1].children[0].textContent, '23:30 ～ 1/2 01:00');
   await elements.get('period-next').trigger('click');
   row = elements.get('record-list').children[0];
-  assert.equal(row.children[0].children[1].textContent, '01:00');
+  assert.equal(row.children[0].children[1].textContent, '1h 00m');
   assert.equal(row.children[1].children[0].textContent, '1/1 23:30 ～ 01:00');
   await row.children.at(-1).trigger('click');
   assert.equal(elements.get('record-dialog').open, true);
@@ -817,19 +817,19 @@ test('日のグラフは初期5時から24区間で表示し、区切りの変�
   const { elements, storage } = app;
   await elements.get('nav-growth').trigger('click');
   assert.match(elements.get('period-label').textContent, /2026\/11\/11/);
-  assert.equal(elements.get('growth-total').textContent, '00:40');
+  assert.equal(elements.get('growth-total').textContent, '0h 40m');
   const bars = elements.get('period-chart').children;
   assert.equal(bars.length, 24);
-  assert.equal(bars[0].getAttribute('aria-label'), '05:00 ～ 06:00 00:00');
-  assert.equal(bars[23].getAttribute('aria-label'), '04:00 ～ 05:00 00:10');
-  assert.equal(elements.get('period-chart-max').textContent, '01:00');
+  assert.equal(bars[0].getAttribute('aria-label'), '05:00 ～ 06:00 0h 00m');
+  assert.equal(bars[23].getAttribute('aria-label'), '04:00 ～ 05:00 0h 10m');
+  assert.equal(elements.get('period-chart-max').textContent, '1h 00m');
   assert.equal(elements.get('day-untimed').hidden, false);
-  assert.equal(elements.get('day-untimed').textContent, '開始時刻なし 00:10');
+  assert.equal(elements.get('day-untimed').textContent, '開始時刻なし 0h 10m');
   await elements.get('period-week').trigger('click');
   assert.equal(elements.get('period-label').textContent, '2026/11/9 ～ 2026/11/15');
   await elements.get('period-day').trigger('click');
   await elements.get('period-next').trigger('click');
-  assert.equal(elements.get('growth-total').textContent, '00:10');
+  assert.equal(elements.get('growth-total').textContent, '0h 10m');
   await elements.get('period-prev').trigger('click');
   await elements.get('settings-toggle').trigger('click');
   assert.equal(elements.get('day-start').value, '05:00');
@@ -843,7 +843,7 @@ test('日のグラフは初期5時から24区間で表示し、区切りの変�
   elements.get('day-start').value = '23:30';
   await elements.get('day-start').trigger('change');
   await elements.get('nav-growth').trigger('click');
-  assert.equal(elements.get('period-chart').children[0].getAttribute('aria-label'), '23:30 ～ 00:30 00:20');
+  assert.equal(elements.get('period-chart').children[0].getAttribute('aria-label'), '23:30 ～ 00:30 0h 20m');
   await elements.get('period-next').trigger('click');
   assert.match(elements.get('period-label').textContent, /2026\/11\/12/);
   await elements.get('period-prev').trigger('click');

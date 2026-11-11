@@ -481,11 +481,6 @@ function removeGroup(group, child = null) {
 
 function durationText(ms) {
   const minutes = Math.max(0, Math.floor(ms / 60_000));
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
-
-function themeTimeText(ms) {
-  const minutes = Math.max(0, Math.floor(ms / 60_000));
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
@@ -498,7 +493,6 @@ function themeBar(title, ms, scale) {
   const row = document.createElement('div');
   row.className = 'theme-chart-row';
   const line = growthLine(title, ms);
-  line.lastElementChild.textContent = themeTimeText(ms);
   const track = document.createElement('div');
   track.className = 'theme-bar-track';
   track.setAttribute('aria-hidden', 'true');
@@ -631,7 +625,7 @@ function renderSubthemeChart(group) {
   if (referenceMs > 0) {
     const reference = document.createElement('p');
     reference.className = 'subtheme-reference-label subtle';
-    reference.textContent = `目安 ${themeTimeText(referenceMs)}`;
+    reference.textContent = `目安 ${durationText(referenceMs)}`;
     section.append(reference);
   }
   const table = document.createElement('table');
@@ -649,7 +643,7 @@ function renderSubthemeChart(group) {
   const zero = document.createElement('span');
   zero.textContent = '0h 00m';
   const maximum = document.createElement('span');
-  maximum.textContent = themeTimeText(scale);
+  maximum.textContent = durationText(scale);
   axis.append(zero, maximum);
   scaleHead.append(axis);
   const valueHead = document.createElement('th');
@@ -681,7 +675,7 @@ function renderSubthemeChart(group) {
     }
     const amount = document.createElement('td');
     amount.className = 'theme-amount';
-    amount.textContent = themeTimeText(child.totalMs);
+    amount.textContent = durationText(child.totalMs);
     row.append(name, cell, amount);
     body.append(row);
   }
@@ -707,12 +701,12 @@ function renderThemes() {
   const unsetMs = summary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
   const scale = themeScale(Math.max(unsetMs, ...summary.groups.map((group) => group.totalMs), 0));
   $('theme-scale').hidden = !groups.length && unsetMs === 0;
-  $('theme-scale-max').textContent = themeTimeText(scale);
+  $('theme-scale-max').textContent = durationText(scale);
   const groupList = $('group-list');
   groupList.replaceChildren();
   if (!groups.length) {
     const empty = document.createElement('p');
-    empty.textContent = 'テーマはまだありません。「＋テーマ」から作れます。';
+    empty.textContent = 'テーマはまだありません。下の入力欄から追加できます。';
     groupList.append(empty);
   }
   for (const group of summary.groups) {
@@ -739,7 +733,7 @@ function renderThemes() {
     if (group.children.length) detail.append(renderSubthemeChart(group));
     const direct = document.createElement('p');
     direct.className = 'subtle';
-    direct.textContent = `サブテーマなし ${themeTimeText(group.directMs)}`;
+    direct.textContent = `サブテーマなし ${durationText(group.directMs)}`;
     if (group.directMs > 0) detail.append(direct);
     const menu = document.createElement('details');
     menu.className = 'theme-edit-menu';
@@ -766,7 +760,7 @@ function renderThemes() {
     input.type = 'text';
     input.maxLength = 60;
     input.required = true;
-    input.placeholder = '例：手';
+    input.placeholder = 'サブテーマを追加';
     input.setAttribute('aria-label', `${group.title}のサブテーマ名`);
     const add = document.createElement('button');
     add.type = 'submit';
@@ -1209,7 +1203,6 @@ $('group-form').addEventListener('submit', (event) => {
   if (!title) return;
   groups.push({ id: newId(), title, children: [] });
   $('group-form').reset();
-  $('theme-add').open = false;
   persist();
   renderGrowth();
   $('growth-status').textContent = 'テーマを追加しました。';
