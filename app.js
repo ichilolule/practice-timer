@@ -128,11 +128,6 @@ function renderTaskChoice() {
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;
-  $('choose-task').textContent = task && !run ? 'タスクを選び直す' : 'タスクを選ぶ';
-  $('choose-task').disabled = Boolean(run && selectedTaskId);
-  $('task-choice-actions').hidden = Boolean(run && selectedTaskId);
-  $('timer-task-add').hidden = Boolean(run && selectedTaskId);
-  if ($('timer-task-add').hidden) $('timer-task-add').open = false;
   renderTaskPicker();
 }
 
@@ -140,12 +135,13 @@ function chooseTask(task) {
   if ((run && selectedTaskId) || task.completedAt != null) return;
   selectedTaskId = task.id;
   persist();
-  if ($('task-picker-dialog').open) $('task-picker-dialog').close();
   switchView('timer');
+  $('main-action').focus();
 }
 
 function renderTaskPicker() {
   const list = $('task-picker-list');
+  const scrollTop = list.scrollTop;
   list.replaceChildren();
   const available = tasks.filter((task) => task.completedAt == null);
   if (!available.length) {
@@ -157,9 +153,12 @@ function renderTaskPicker() {
     const item = document.createElement('li');
     const choose = rowButton(task.title, `${task.title}をこの回に選ぶ`, () => chooseTask(task));
     choose.className = 'task-pick';
+    choose.setAttribute('aria-pressed', String(task.id === selectedTaskId));
+    choose.disabled = Boolean(run && selectedTaskId);
     item.append(choose);
     list.append(item);
   }
+  list.scrollTop = scrollTop;
 }
 
 function switchView(name) {
@@ -1149,11 +1148,6 @@ $('preview-rest').addEventListener('click', () => previewSound('rest'));
 for (const view of ['timer', 'tasks', 'growth', 'themes']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
-$('choose-task').addEventListener('click', () => {
-  if (run && selectedTaskId) return;
-  renderTaskPicker();
-  $('task-picker-dialog').showModal();
-});
 $('timer-quick-task-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const input = $('timer-quick-task-title');
@@ -1163,11 +1157,6 @@ $('timer-quick-task-form').addEventListener('submit', (event) => {
   input.value = '';
 });
 $('timer-task-details-add').addEventListener('click', () => openTaskEditor(null, true, 'timer-quick-task-title'));
-$('task-picker-add').addEventListener('click', () => {
-  $('task-picker-dialog').close();
-  openTaskEditor(null, true);
-});
-$('task-picker-close').addEventListener('click', () => $('task-picker-dialog').close());
 $('task-details-add').addEventListener('click', () => openTaskEditor(null, false, 'quick-task-title'));
 $('task-undo').addEventListener('click', () => {
   const task = tasks.find((item) => item.id === taskUndo?.taskId);

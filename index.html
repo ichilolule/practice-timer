@@ -52,9 +52,7 @@
         <h2 class="sr-only">この回のタスク</h2>
         <p id="active-task-name" hidden></p>
         <p id="active-task-hint" class="subtle" hidden></p>
-        <div id="task-choice-actions" class="task-actions">
-          <button id="choose-task" type="button">タスクを選ぶ</button>
-        </div>
+        <ul id="task-picker-list" class="item-list" aria-label="この回のタスクを選ぶ"></ul>
         <details id="timer-task-add" class="task-add-details">
         <summary aria-label="タスクを追加" title="タスクを追加"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg></summary>
         <form id="timer-quick-task-form" class="inline-form">
@@ -180,15 +178,6 @@
       <p class="subtle">読み込みは現在のタスク・時間・テーマ・各設定を置き換えます。計測中は読み込めません。</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
-
-    <dialog id="task-picker-dialog" aria-labelledby="task-picker-title">
-      <h2 id="task-picker-title">この回のタスクを選ぶ</h2>
-      <ul id="task-picker-list" class="item-list"></ul>
-      <div class="task-actions">
-        <button id="task-picker-add" type="button">＋新しいタスク</button>
-        <button id="task-picker-close" type="button">閉じる</button>
-      </div>
-    </dialog>
 
     <dialog id="task-dialog" aria-labelledby="task-dialog-title">
       <h2 id="task-dialog-title">タスクを追加</h2>

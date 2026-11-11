@@ -19,8 +19,9 @@ h3 { font-size: 1rem; }
 #primary-nav button { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; min-width: 0; min-height: 56px; padding: 5px 2px; border: 0; background: transparent; color: #626a77; font-size: .75rem; }
 #primary-nav .icon { width: 22px; height: 22px; }
 #primary-nav [aria-current="page"] { background: #e3edff; color: #263d60; font-weight: 700; }
-.timer-layout { display: grid; gap: 16px; min-height: calc(100vh - 108px); min-height: calc(100dvh - 108px); align-content: center; }
+.timer-layout { display: grid; grid-template-areas: "timer" "tasks"; gap: 16px; min-height: calc(100vh - 108px); min-height: calc(100dvh - 108px); align-content: center; }
 .timer-layout > div { min-width: 0; }
+.timer-face { grid-area: timer; align-self: center; }
 p { line-height: 1.5; }
 .phase { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; color: #52647e; }
 .phase > .icon { width: 28px; height: 28px; }
@@ -39,15 +40,13 @@ p { line-height: 1.5; }
 #status:empty { display: none; }
 .subtle { color: #626a77; font-size: .9rem; }
 #step-list { padding-left: 25px; }
-#active-task-panel { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; padding: 12px 0 0; }
+#active-task-panel { grid-area: tasks; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 0 0; }
 #active-task-panel h2 { margin: 0; }
-#active-task-name { flex-basis: 100%; margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; text-align: center; }
-#active-task-hint { flex-basis: 100%; margin: 0; text-align: center; overflow-wrap: anywhere; }
-#task-choice-actions { margin: 0; }
+#active-task-name { flex-shrink: 0; max-height: 3em; overflow: auto; margin: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+#active-task-hint { flex-shrink: 0; max-height: 4.5em; overflow: auto; margin: 0; overflow-wrap: anywhere; }
 .task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.task-add-details { margin: 0; }
-.task-add-details[open] { flex-basis: 100%; }
-.task-add-details > summary { display: grid; place-items: center; list-style: none; width: 44px; min-height: 44px; margin: auto; }
+.task-add-details { flex-shrink: 0; margin: 0; }
+.task-add-details > summary { display: grid; place-items: center; list-style: none; width: 44px; min-height: 44px; margin: 0; }
 .task-add-details > summary::-webkit-details-marker { display: none; }
 .task-add-details > summary, #completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
 .quiet-button { border-color: transparent; color: #4e5d74; background: transparent; }
@@ -60,7 +59,9 @@ p { line-height: 1.5; }
 dialog { width: min(600px, calc(100% - 30px)); max-height: min(85vh, 800px); overflow: auto; padding: 22px; border: 1px solid #abb1bd; border-radius: 12px; color: inherit; background: white; box-shadow: 0 12px 40px #24283229; }
 dialog::backdrop { background: #24283266; }
 dialog h2 { margin-top: 0; }
-#task-picker-list { max-height: 50vh; overflow: auto; }
+#task-picker-list { flex: 1 1 auto; min-height: 56px; max-height: min(40vh, 360px); max-height: min(40dvh, 360px); overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 4px; scrollbar-gutter: stable; }
+#task-picker-list li { padding: 4px 0; }
+#task-picker-list .task-pick[aria-pressed="true"] { background: #e3edff; color: #263d60; font-weight: 700; opacity: 1; }
 .item-list { padding: 0; list-style: none; }
 .item-list li { padding: 12px 0; border-bottom: 1px solid #dde1e8; }
 .item-list p { margin: 5px 0; }
@@ -182,9 +183,13 @@ dialog h2 { margin-top: 0; }
 #sound-status { color: #a32222; }
 #sound-status:empty, #settings-error:empty { display: none; }
 [hidden] { display: none !important; }
-@media (min-width: 800px) and (min-aspect-ratio: 6/5), (min-width: 560px) and (max-height: 520px) {
-  .timer-layout { grid-template-columns: minmax(0, 1fr) minmax(160px, .7fr); align-items: center; }
-  #active-task-panel { padding: 0; }
+/* 左右に約320pxずつ確保できる幅から横並びにする。 */
+@media (min-width: 720px) {
+  .timer-layout { grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; height: calc(100vh - 108px - env(safe-area-inset-bottom)); height: calc(100dvh - 108px - env(safe-area-inset-bottom)); min-height: 280px; align-content: stretch; }
+  #active-task-panel { height: 100%; padding: 0; }
+  #task-picker-list { max-height: none; }
+  #clock { font-size: clamp(2rem, min(12vw, 22vh), 5.5rem); }
+  #clock.has-hours { font-size: clamp(2rem, min(8vw, 18vh), 4rem); }
 }
 @media (max-width: 440px) {
   .app { padding: 12px 15px calc(84px + env(safe-area-inset-bottom)); }
@@ -193,7 +198,7 @@ dialog h2 { margin-top: 0; }
 }
 @media (max-height: 420px) {
   .app { padding-top: 8px; }
-  .timer-layout { gap: 8px; min-height: calc(100vh - 96px); min-height: calc(100dvh - 96px); }
+  .timer-layout { gap: 8px; }
   .phase { height: 24px; }
   .phase > .icon { width: 24px; height: 24px; }
   .phase > .pause-badge { width: 12px; height: 12px; }
@@ -203,5 +208,4 @@ dialog h2 { margin-top: 0; }
   .icon-button { width: 44px; height: 44px; }
   #main-action { width: 56px; height: 56px; }
   #active-task-panel { padding-top: 4px; }
-  #active-task-name, #active-task-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
