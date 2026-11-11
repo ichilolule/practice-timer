@@ -2,7 +2,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, select, textarea { font: inherit; }
-button { cursor: pointer; border: 1px solid #abb1bd; border-radius: 8px; background: white; color: inherit; padding: 9px 12px; }
+button { cursor: pointer; border: 1px solid #abb1bd; border-radius: 8px; background: white; color: inherit; padding: 9px 12px; min-height: 44px; min-width: 44px; }
+button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid #526f9e; outline-offset: 3px; }
 button:hover:not(:disabled) { background: #e9edf5; }
 button:disabled { opacity: .45; cursor: default; }
 .app { width: min(100%, 1000px); min-height: min(100vh, 1000px); margin: 0 auto; padding: 20px; background: white; }
@@ -15,11 +16,17 @@ h3 { font-size: 1rem; }
 #primary-nav { display: flex; gap: 8px; margin-top: 18px; border-bottom: 1px solid #dde1e8; padding-bottom: 10px; }
 #primary-nav [aria-current="page"] { background: #e3edff; border-color: #88a6d9; font-weight: 700; }
 .timer-layout { display: grid; gap: 25px; }
+.timer-layout > div { min-width: 0; }
 p { line-height: 1.5; }
 .phase { text-align: center; font-size: 1.4rem; margin: 46px 0 0; }
-#clock { font-variant-numeric: tabular-nums; font-size: clamp(4rem, 18vw, 8rem); line-height: 1.2; text-align: center; margin: 8px 0; }
+#clock { font-variant-numeric: tabular-nums; font-size: clamp(3rem, 15vw, 7rem); line-height: 1.2; text-align: center; margin: 8px 0; }
 .controls { justify-content: center; margin: 25px 0 12px; }
 #main-action, #save-settings { background: #e3edff; border-color: #88a6d9; font-weight: 700; }
+.timer-state { text-align: center; min-height: 1.5em; margin: 8px 0; }
+.timer-main-controls { margin: 20px 0 16px; }
+#main-action { width: 200px; max-width: 100%; height: 56px; font-size: 1.1rem; }
+.timer-secondary-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px 24px; min-height: 44px; }
+#end { border-color: #8c95a4; }
 #status { min-height: 1.5em; text-align: center; }
 .subtle { color: #626a77; font-size: .9rem; }
 #step-list { padding-left: 25px; }
@@ -27,6 +34,10 @@ p { line-height: 1.5; }
 #active-task-panel h2 { margin: 0; }
 #active-task-name { margin: 12px 0 4px; font-size: 1.15rem; font-weight: 700; overflow-wrap: anywhere; }
 .task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.task-add-details { margin-top: 12px; }
+.task-add-details > summary { width: fit-content; }
+.task-add-details > summary, #completed-section > summary, .task-menu > summary { min-height: 44px; padding: 10px 4px; cursor: pointer; }
+.quiet-button { border-color: transparent; color: #4e5d74; background: transparent; }
 #task-form { display: grid; gap: 12px; }
 #task-form label { display: grid; gap: 5px; }
 #task-form input, #task-form textarea, #task-form select, .inline-form input, .record-row input, .record-row select { padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
@@ -37,9 +48,22 @@ dialog { width: min(600px, calc(100% - 30px)); max-height: min(85vh, 800px); ove
 dialog::backdrop { background: #24283266; }
 dialog h2 { margin-top: 0; }
 #task-picker-list { max-height: 50vh; overflow: auto; }
-.item-list { padding-left: 20px; }
+.item-list { padding: 0; list-style: none; }
 .item-list li { padding: 12px 0; border-bottom: 1px solid #dde1e8; }
 .item-list p { margin: 5px 0; }
+.item-list .task-row { display: flex; align-items: flex-start; gap: 8px; padding: 0; }
+.task-check { display: grid; place-items: center; flex: 0 0 44px; min-height: 56px; cursor: pointer; }
+.task-check input { width: 20px; height: 20px; margin: 0; accent-color: #526f9e; cursor: pointer; }
+.task-details { flex: 1; min-width: 0; }
+.task-details > summary { min-height: 56px; padding: 16px 8px; overflow-wrap: anywhere; cursor: pointer; }
+.task-detail-content { padding: 0 8px 16px; overflow-wrap: anywhere; }
+.task-detail-content .subtle { margin-top: 12px; }
+.task-menu { margin-top: 8px; }
+.task-menu > summary { color: #626a77; font-size: .9rem; width: fit-content; }
+.task-menu button { color: #a32222; }
+.task-pick { display: block; width: 100%; border: 0; text-align: left; overflow-wrap: anywhere; }
+.task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task-feedback p:empty { display: none; }
 .group-card button { margin-right: 5px; }
 #completed-section { margin-top: 28px; padding-top: 14px; border-top: 1px solid #dde1e8; }
 #completed-section summary { cursor: pointer; font-weight: 700; }
