@@ -135,7 +135,10 @@ function renderTaskChoice(rebuildPicker = true) {
   else for (const row of $('task-picker-list').children) {
     const choose = row.querySelector('button');
     if (choose) {
-      choose.setAttribute('aria-pressed', String(row.getAttribute('data-task-id') === selectedTaskId));
+      const selected = row.getAttribute('data-task-id') === selectedTaskId;
+      choose.setAttribute('aria-pressed', String(selected));
+      const task = tasks.find((item) => item.id === row.getAttribute('data-task-id'));
+      choose.setAttribute('aria-label', `${task.title}を${selected ? '編集' : 'この回に選ぶ'}`);
       choose.disabled = hideList;
     }
   }
@@ -156,6 +159,7 @@ function renderTimerTaskChildren(selected = '') {
 }
 
 function renderTimerTaskDetails(task) {
+  $('timer-task-title').value = task.title;
   $('timer-task-memo').value = task.firstStep;
   const { groupId, childId } = taskTargetParts(task.targetId);
   const select = $('timer-task-group');
@@ -189,8 +193,10 @@ function renderTaskPicker() {
   }
   for (const task of available) {
     const item = document.createElement('li');
-    const choose = rowButton(task.title, `${task.title}をこの回に選ぶ`, () => chooseTask(task, false));
-    choose.addEventListener('dblclick', () => openTaskEditor(task));
+    const choose = rowButton(task.title, `${task.title}を${task.id === selectedTaskId ? '編集' : 'この回に選ぶ'}`, () => {
+      if (task.id === selectedTaskId) openTaskEditor(task);
+      else chooseTask(task, false);
+    });
     choose.className = 'task-pick';
     choose.setAttribute('aria-pressed', String(task.id === selectedTaskId));
     choose.disabled = Boolean(run && selectedTaskId);
@@ -396,7 +402,6 @@ function setTaskCompleted(task, completed) {
   if (completed) {
     const undo = { taskId: task.id, completedAt: task.completedAt, selectedBefore };
     taskUndo = undo;
-    $('task-toast-message').textContent = `「${task.title}」を完了にしました。`;
     $('task-undo').hidden = false;
     $('task-toast').hidden = false;
     setTimeout(() => { if (taskUndo === undo) clearTaskUndo(); }, 5000);
@@ -429,7 +434,6 @@ function taskRow(task, completed) {
   const title = document.createElement('summary');
   title.id = `task-title-${task.id}`;
   title.textContent = task.title;
-  title.addEventListener('dblclick', () => openTaskEditor(task));
   const content = document.createElement('div');
   content.className = 'task-detail-content';
   if (task.firstStep) {
@@ -1319,9 +1323,22 @@ $('preview-rest').addEventListener('click', () => previewSound('rest'));
 for (const view of ['timer', 'tasks', 'growth', 'themes']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
-for (const id of ['active-task-name', 'timer-task-edit']) $(id).addEventListener('click', () => {
+$('active-task-name').addEventListener('click', () => {
   const task = tasks.find((item) => item.id === selectedTaskId);
   if (task) openTaskEditor(task);
+});
+$('timer-task-title').addEventListener('input', () => {
+  const task = tasks.find((item) => item.id === selectedTaskId);
+  const title = $('timer-task-title').value.trim();
+  if (!task || !run || !title) return;
+  task.title = title;
+  persist();
+  $('active-task-name').textContent = title;
+  $('active-task-name').title = title;
+});
+$('timer-task-title').addEventListener('blur', () => {
+  const task = tasks.find((item) => item.id === selectedTaskId);
+  if (task) $('timer-task-title').value = task.title;
 });
 $('timer-task-memo').addEventListener('input', () => {
   const task = tasks.find((item) => item.id === selectedTaskId);

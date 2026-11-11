@@ -711,7 +711,7 @@ test('タイトル中心の詳細からタスクを選び、入力中のタイ�
     JSON.parse(storage.get('practice-timer-v1')).tasks[0].id);
 });
 
-test('先頭へ追加し、クリック後も同じ行でダブルクリックから詳細を編集できる', async () => {
+test('先頭へ追加し、未選択タスクは選択、選択済みタスクは再クリックで詳細を編集できる', async () => {
   const { elements, storage } = mount();
   for (const title of ['古いタスク', '新しいタスク']) {
     elements.get('timer-quick-task-title').value = title;
@@ -724,8 +724,9 @@ test('先頭へ追加し、クリック後も同じ行でダブルクリック�
   await button.trigger('click');
   assert.equal(list.scrollTop, 120);
   assert.equal(list.children[1].children[0], button);
+  assert.equal(elements.get('task-dialog').open, false);
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
   await button.trigger('click');
-  await button.trigger('dblclick');
   assert.equal(elements.get('task-dialog').open, true);
   assert.equal(elements.get('task-title').value, '古いタスク');
   elements.get('task-first-step').value = '詳細を保存';
@@ -738,7 +739,7 @@ test('先頭へ追加し、クリック後も同じ行でダブルクリック�
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks[0].title, '詳細付きの新規');
 });
 
-test('計測中の空き欄でメモ・テーマ・サブテーマを自動保存し、その設定で記録する', async () => {
+test('計測中の空き欄でタイトル・メモ・テーマを自動保存し、空のタイトルを保存しない', async () => {
   const app = mount(new Map([['practice-timer-v1', JSON.stringify({
     format: 'practice-timer-beta', version: 1,
     steps: [{ type: 'work', minutes: 1 }, { type: 'rest', minutes: 1 }],
@@ -750,6 +751,14 @@ test('計測中の空き欄でメモ・テーマ・サブテーマを自動保�
   await elements.get('main-action').trigger('click');
   assert.equal(elements.get('timer-task-details').hidden, false);
   assert.equal(elements.get('active-task-panel').hidden, true);
+  assert.equal(elements.get('timer-task-title').value, '練習');
+  elements.get('timer-task-title').value = '発音を練習';
+  await elements.get('timer-task-title').trigger('input');
+  assert.equal(elements.get('active-task-name').textContent, '発音を練習');
+  elements.get('timer-task-title').value = '  ';
+  await elements.get('timer-task-title').trigger('input');
+  await elements.get('timer-task-title').trigger('blur');
+  assert.equal(elements.get('timer-task-title').value, '発音を練習');
   elements.get('timer-task-memo').value = '今の気づき\n次に試すこと';
   await elements.get('timer-task-memo').trigger('input');
   elements.get('timer-task-group').value = 'g';
@@ -758,6 +767,7 @@ test('計測中の空き欄でメモ・テーマ・サブテーマを自動保�
   elements.get('timer-task-child').value = 'c';
   await elements.get('timer-task-child').trigger('change');
   const restored = mount(app.storage);
+  assert.equal(restored.elements.get('timer-task-title').value, '発音を練習');
   assert.equal(restored.elements.get('timer-task-memo').value, '今の気づき\n次に試すこと');
   assert.equal(restored.elements.get('timer-task-child').value, 'c');
   app.advance(3000);
@@ -766,6 +776,7 @@ test('計測中の空き欄でメモ・テーマ・サブテーマを自動保�
   const saved = JSON.parse(app.storage.get('practice-timer-v1'));
   assert.equal(saved.tasks[0].firstStep, '今の気づき\n次に試すこと');
   assert.equal(saved.sessions[0].targetId, 'c');
+  assert.equal(saved.sessions[0].taskTitle, '発音を練習');
   assert.equal(saved.sessions[0].workMs, 3000);
 });
 
@@ -797,7 +808,8 @@ test('完了と取り消しでスクロールを保ち、通知は最後の完�
   app.advance(2000);
   app.flushDueTimeouts();
   assert.equal(elements.get('task-toast').hidden, false);
-  assert.match(elements.get('task-toast-message').textContent, /b/);
+  assert.equal(elements.get('task-undo').hidden, false);
+  assert.match(elements.get('task-status').textContent, /b/);
   app.advance(2999);
   app.flushDueTimeouts();
   assert.equal(elements.get('task-toast').hidden, false);

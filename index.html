@@ -62,11 +62,10 @@
       </div>
       <div id="timer-task-details" hidden>
         <h2 class="sr-only">計測中のタスクの詳細</h2>
-        <label>メモ <textarea id="timer-task-memo" rows="6" maxlength="500"></textarea></label>
+        <label>タイトル <input id="timer-task-title" type="text" maxlength="100" required></label>
+        <label class="timer-memo-field">メモ <textarea id="timer-task-memo" maxlength="500"></textarea></label>
         <label>テーマ <select id="timer-task-group"></select></label>
         <label>サブテーマ <select id="timer-task-child"></select></label>
-        <p class="subtle">変更は自動保存</p>
-        <button id="timer-task-edit" type="button">詳細を開く</button>
       </div>
       </div>
     </section>
@@ -185,7 +184,6 @@
     </section>
 
     <div id="task-toast" class="task-toast" role="status" aria-live="polite" hidden>
-      <span id="task-toast-message"></span>
       <button id="task-undo" type="button" hidden>完了を取り消す</button>
     </div>
 
