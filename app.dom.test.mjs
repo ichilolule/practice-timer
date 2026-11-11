@@ -101,7 +101,7 @@ function recordAudio() {
   return { AudioContext, notes, gains };
 }
 
-test('通知音の音量・高さを共通設定し、2音と3音をほぼ同じ長さで試聴できる', async () => {
+test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で試聴できる', async () => {
   const audio = recordAudio();
   const app = mount(new Map(), audio.AudioContext);
   const { elements } = app;
@@ -124,16 +124,24 @@ test('通知音の音量・高さを共通設定し、2音と3音をほぼ同じ
   await elements.get('preview-rest').trigger('click');
   assert.equal(audio.notes.length, 5);
   assert.deepEqual(audio.notes.slice(2).map(note => note.frequency.value), [1318.5, 1108.74, 880]);
-  assert.ok(Math.abs(audio.notes[4].stoppedAt - 0.50) < 1e-9);
+  assert.ok(Math.abs(audio.notes[4].stoppedAt - 0.5769230769230769) < 1e-9);
   assert.ok(audio.notes.every(note => note.stoppedAt > note.startedAt));
   assert.ok(audio.gains.every(events => events.every(event => event.value > 0)));
   const restored = mount(app.storage).elements;
   await restored.get('settings-toggle').trigger('click');
   assert.equal(restored.get('sound-volume').value, '50');
   assert.equal(restored.get('sound-pitch').value, '12');
+  app.flushTimeouts();
+  elements.get('sound-volume').value = '300';
+  await elements.get('sound-volume').trigger('change');
+  await elements.get('preview-work').trigger('click');
+  assert.equal(audio.gains[5][1].value, 0.48);
+  const boosted = mount(app.storage).elements;
+  await boosted.get('settings-toggle').trigger('click');
+  assert.equal(boosted.get('sound-volume').value, '300');
   await elements.get('export-data').trigger('click');
   const backup = JSON.parse(await app.exportedBlob.text());
-  assert.deepEqual(backup.sound, { volume: 50, pitch: 12 });
+  assert.deepEqual(backup.sound, { volume: 300, pitch: 12 });
   backup.sound = { volume: 35, pitch: -12 };
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
   await elements.get('import-file').trigger('change');
@@ -142,6 +150,10 @@ test('通知音の音量・高さを共通設定し、2音と3音をほぼ同じ
   assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '標準より12半音低い');
   const beforeInvalid = app.storage.get('practice-timer-v1');
   backup.sound.pitch = 99;
+  await elements.get('import-file').trigger('change');
+  assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
+  assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
+  backup.sound = { volume: 301, pitch: 0 };
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
   assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);

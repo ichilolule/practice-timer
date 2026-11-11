@@ -723,7 +723,7 @@ function deleteRecord(group) {
 
 function validateSound(raw) {
   if (raw == null) return { ...DEFAULT_SOUND };
-  if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 100 ||
+  if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 300 ||
       !Number.isInteger(raw.pitch) || raw.pitch < -12 || raw.pitch > 12) {
     throw new Error('音の設定が不正です。');
   }
@@ -836,7 +836,7 @@ function playSound(phase) {
   if (!soundSettings.volume || !audioContext || audioContext.state !== 'running') return 0;
   const start = audioContext.currentTime;
   const frequencies = phase === 'work' ? [660, 880] : [659.25, 554.37, 440];
-  const speed = phase === 'rest' ? 1.5 : 1;
+  const speed = phase === 'rest' ? 1.3 : 1;
   const pitchRatio = 2 ** (soundSettings.pitch / 12);
   const peakGain = 0.16 * soundSettings.volume / 100;
   frequencies.forEach((frequency, index) => {
@@ -858,7 +858,8 @@ function playSound(phase) {
 function renderSoundSettings() {
   $('sound-volume').value = String(soundSettings.volume);
   $('sound-pitch').value = String(soundSettings.pitch);
-  $('sound-volume-value').textContent = soundSettings.volume ? `${soundSettings.volume}%` : '0%（消音）';
+  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0%（消音）'
+    : soundSettings.volume === 100 ? '100%（標準）' : `${soundSettings.volume}%`;
   $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? '標準'
     : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)}半音`;
   $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
