@@ -90,10 +90,14 @@ dialog h2 { margin-top: 0; }
 .growth-summary { margin: 22px 0; text-align: center; font-variant-numeric: tabular-nums; }
 .growth-period-total { margin: 0; font-size: clamp(2.4rem, 9vw, 3.5rem); line-height: 1.2; font-weight: 700; overflow-wrap: anywhere; }
 #growth-all-total { margin: 6px 0 0; font-size: .85rem; }
-.period-chart { display: flex; align-items: end; gap: 2px; height: 150px; padding: 12px 4px 0; margin: 16px 0 24px; border-bottom: 1px solid #abb1bd; }
-.period-bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; padding: 0; border: 0; border-radius: 0; background: transparent; }
-.period-bar-fill { width: min(100%, 25px); min-height: 1px; background: #78b6e8; border-radius: 3px 3px 0 0; }
-.period-bar small { white-space: nowrap; font-size: .68rem; }
+.period-chart-layout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; margin: 16px 0 24px; }
+.period-axis { display: flex; flex-direction: column; justify-content: space-between; height: 150px; color: #626a77; font-size: .68rem; font-variant-numeric: tabular-nums; }
+.period-chart { display: flex; gap: 2px; height: 172px; }
+.period-bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.period-bar-track { width: 100%; height: 150px; display: flex; align-items: end; justify-content: center; border-bottom: 1px solid #abb1bd; }
+.period-bar-fill { width: min(100%, 25px); background: #78b6e8; border-radius: 3px 3px 0 0; }
+.period-bar small { height: 22px; padding-top: 4px; white-space: nowrap; font-size: .68rem; }
+#day-untimed { font-size: .85rem; }
 #period-group-list p { margin: 6px 0; }
 .growth-group { margin: 0; padding: 14px 0; border-bottom: 1px solid #dde1e8; }
 .growth-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 16px; margin: 0; font-size: 1rem; }
@@ -135,6 +139,10 @@ dialog h2 { margin-top: 0; }
 .settings-actions { justify-content: flex-start; }
 #settings-error { color: #a32222; min-height: 1.5em; }
 .settings-hint { margin-left: 8px; color: #626a77; font-size: .75rem; font-weight: 400; }
+.day-boundary-setting { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+.day-boundary-setting input { font: inherit; min-height: 44px; padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
+#day-start-error { color: #a32222; }
+#day-start-error:empty { display: none; }
 .sound-settings { display: grid; gap: 14px; max-width: 420px; margin-bottom: 14px; }
 .sound-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sound-field output { color: #626a77; font-size: .9rem; font-variant-numeric: tabular-nums; }

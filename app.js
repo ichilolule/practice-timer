@@ -7,6 +7,7 @@ const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodB
 const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
 const DEFAULT_SOUND = { volume: 100, pitch: 0 };
+const DEFAULT_DAY_START = 5 * 60;
 // 保存値の尺度は旧版のままにして、画面の1%を従来の5%分に対応させる。
 const SOUND_VOLUME_SCALE = 5;
 const $ = (id) => document.getElementById(id);
@@ -28,6 +29,7 @@ let periodAnchor = Date.now();
 let editingRecordId = null;
 let audioContext = null;
 let soundSettings = { ...DEFAULT_SOUND };
+let dayStartMinutes = DEFAULT_DAY_START;
 let previewPlaying = false;
 let lastSaved = 0;
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -36,7 +38,7 @@ function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     if (saved.format === BACKUP_FORMAT) {
-      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings } = validateBackup(saved));
+      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = validateBackup(saved));
       return;
     }
     if (Array.isArray(saved.steps) && saved.steps.length) steps = normalizeSteps(saved.steps);
@@ -58,7 +60,7 @@ function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: BACKUP_FORMAT, version: 1,
       steps, run, totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
-      tasks, groups, sessions, selectedTaskId, sound: soundSettings }));
+      tasks, groups, sessions, selectedTaskId, sound: soundSettings, dayStartMinutes }));
     lastSaved = Date.now();
     return true;
   } catch {
@@ -492,7 +494,8 @@ function dateInputValue(timestamp) {
 
 function periodLabel(bounds) {
   const start = new Date(bounds.start);
-  const end = new Date(bounds.end - 1);
+  const end = new Date(bounds.end);
+  end.setDate(end.getDate() - 1);
   if (periodKind === 'year') return `${start.getFullYear()}年`;
   if (periodKind === 'month') return `${start.getFullYear()}年${start.getMonth() + 1}月`;
   if (periodKind === 'week') return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
@@ -500,8 +503,7 @@ function periodLabel(bounds) {
 }
 
 function movePeriod(direction) {
-  const next = new Date(periodAnchor);
-  next.setHours(12, 0, 0, 0);
+  const next = new Date(periodBounds(periodKind, periodAnchor, dayStartMinutes).start);
   if (periodKind === 'year') { next.setMonth(0, 1); next.setFullYear(next.getFullYear() + direction); }
   else if (periodKind === 'month') { next.setDate(1); next.setMonth(next.getMonth() + direction); }
   else next.setDate(next.getDate() + direction * (periodKind === 'week' ? 7 : 1));
@@ -516,7 +518,7 @@ function recalculateTotal() {
 }
 
 function renderGrowth() {
-  const bounds = periodBounds(periodKind, periodAnchor);
+  const bounds = periodBounds(periodKind, periodAnchor, dayStartMinutes);
   const periodSessions = sessions.map((session) => ({ ...session,
     workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
   const periodMs = periodSessions.reduce((sum, session) => sum + session.workMs, 0);
@@ -528,31 +530,45 @@ function renderGrowth() {
   $('growth-all-total').textContent = `全期間 ${durationText(run?.totalWorkMs ?? totalWorkMs)}`;
   const chart = $('period-chart');
   chart.replaceChildren();
-  const buckets = periodBuckets(periodKind, periodAnchor, sessions);
-  chart.hidden = !buckets.some((bucket) => bucket.workMs > 0);
-  const largest = Math.max(1, ...buckets.map((bucket) => bucket.workMs));
-  for (const bucket of buckets) {
+  const buckets = periodBuckets(periodKind, periodAnchor, sessions, dayStartMinutes);
+  chart.hidden = periodKind !== 'day' && !buckets.some((bucket) => bucket.workMs > 0);
+  $('period-chart-layout').hidden = chart.hidden;
+  const largest = Math.max(3_600_000, Math.ceil(Math.max(0, ...buckets.map((bucket) => bucket.workMs)) / 3_600_000) * 3_600_000);
+  $('period-chart-max').textContent = durationText(largest);
+  for (const [index, bucket] of buckets.entries()) {
     const date = new Date(bucket.start);
-    const item = document.createElement('button');
-    item.type = 'button';
+    const item = document.createElement(periodKind === 'day' ? 'div' : 'button');
+    if (periodKind === 'day') item.setAttribute('role', 'img');
+    else item.type = 'button';
     item.className = 'period-bar';
+    const track = document.createElement('div');
+    track.className = 'period-bar-track';
     const fill = document.createElement('div');
     fill.className = 'period-bar-fill';
     fill.style.height = `${bucket.workMs / largest * 100}%`;
     const label = document.createElement('small');
-    label.textContent = periodKind === 'year' ? `${date.getMonth() + 1}月`
-      : periodKind === 'week' ? `${date.getMonth() + 1}/${date.getDate()}` : String(date.getDate());
-    item.setAttribute('aria-label', `${label.textContent} ${durationText(bucket.workMs)}`);
-    item.title = `${label.textContent} ${durationText(bucket.workMs)}`;
-    item.addEventListener('click', () => {
-      date.setHours(12, 0, 0, 0);
-      periodAnchor = date.getTime();
+    const hour = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const bucketLabel = periodKind === 'day' ? `${hour} ～ ${new Date(bucket.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+      : periodKind === 'year' ? `${date.getMonth() + 1}月`
+      : `${date.getMonth() + 1}/${date.getDate()}`;
+    label.textContent = periodKind === 'day' ? (index % 3 === 0 ? (date.getMinutes() ? hour : `${date.getHours()}時`) : '\u00a0')
+      : periodKind === 'year' ? bucketLabel
+      : periodKind === 'week' ? bucketLabel : (date.getDate() === 1 || date.getDate() % 5 === 0 ? String(date.getDate()) : '\u00a0');
+    item.setAttribute('aria-label', `${bucketLabel} ${durationText(bucket.workMs)}`);
+    item.title = `${bucketLabel} ${durationText(bucket.workMs)}`;
+    if (periodKind !== 'day') item.addEventListener('click', () => {
+      periodAnchor = bucket.start;
       periodKind = periodKind === 'year' ? 'month' : 'day';
       renderGrowth();
     });
-    item.append(fill, label);
+    track.append(fill);
+    item.append(track, label);
     chart.append(item);
   }
+  const untimedMs = periodSessions.filter((session) => session.startedAt == null)
+    .reduce((sum, session) => sum + session.workMs, 0);
+  $('day-untimed').hidden = periodKind !== 'day' || untimedMs === 0;
+  $('day-untimed').textContent = `開始時刻なし ${durationText(untimedMs)}`;
   const periodSummary = summarize(groups, periodSessions);
   const breakdown = $('period-group-list');
   breakdown.replaceChildren();
@@ -774,6 +790,14 @@ function validateSound(raw) {
   return { volume: raw.volume, pitch: raw.pitch };
 }
 
+function validateDayStart(value) {
+  if (value === undefined) return DEFAULT_DAY_START;
+  if (!Number.isInteger(value) || value < 0 || value >= 24 * 60) {
+    throw new Error('1日の区切りの設定が不正です。');
+  }
+  return value;
+}
+
 function validateBackup(raw) {
   if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== 1 ||
       !Array.isArray(raw.steps) || !Array.isArray(raw.tasks) ||
@@ -839,7 +863,8 @@ function validateBackup(raw) {
     ? raw.selectedTaskId : null;
   return { steps: restoredSteps, tasks: restoredTasks, groups: restoredGroups,
     sessions: restoredSessions, run: restoredRun, totalWorkMs: restoredTotal,
-    selectedTaskId: restoredSelection, sound: validateSound(raw.sound) };
+    selectedTaskId: restoredSelection, sound: validateSound(raw.sound),
+    dayStartMinutes: validateDayStart(raw.dayStartMinutes) };
 }
 
 function backupObject() {
@@ -847,7 +872,7 @@ function backupObject() {
   return { format: BACKUP_FORMAT, version: 1, steps, tasks, groups, sessions,
     totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
     run: run ? { ...run, status: 'paused', lastTick: null } : null,
-    selectedTaskId, sound: soundSettings };
+    selectedTaskId, sound: soundSettings, dayStartMinutes };
 }
 
 function showSettings() {
@@ -858,6 +883,7 @@ function showSettings() {
     ? `通知の許可状態：${Notification.permission}` : 'この環境では通知を利用できません。';
   renderSettings();
   renderSoundSettings();
+  renderDayStart();
   $('import-file').disabled = Boolean(run);
   switchView('settings');
 }
@@ -865,6 +891,26 @@ function showSettings() {
 function showTimer() {
   switchView('timer');
 }
+
+function renderDayStart() {
+  $('day-start').value = `${String(Math.floor(dayStartMinutes / 60)).padStart(2, '0')}:${String(dayStartMinutes % 60).padStart(2, '0')}`;
+}
+
+$('day-start').addEventListener('change', () => {
+  const value = $('day-start').value;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    $('day-start-error').textContent = '1日の区切りを設定してください。';
+    renderDayStart();
+    return;
+  }
+  const [hours, minutes] = value.split(':').map(Number);
+  const selectedDay = new Date(periodBounds('day', periodAnchor, dayStartMinutes).start);
+  selectedDay.setHours(hours, minutes, 0, 0);
+  periodAnchor = selectedDay.getTime();
+  dayStartMinutes = hours * 60 + minutes;
+  $('day-start-error').textContent = persist() ? '' : '1日の区切りを保存できませんでした。';
+  renderGrowth();
+});
 
 async function prepareAudio() {
   try {
@@ -1162,7 +1208,7 @@ $('import-file').addEventListener('change', async () => {
     if (file.size > 5_000_000) throw new Error('5MBを超えるJSONは読み込めません。');
     const next = validateBackup(JSON.parse(await file.text()));
     if (!confirm('現在のデータをJSONの内容で置き換えますか？')) return;
-    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings } = next);
+    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
     settingsDraftActive = false;
     taskUndo = null;
     $('task-undo').hidden = true;
@@ -1172,6 +1218,7 @@ $('import-file').addEventListener('change', async () => {
     renderTimer();
     renderTaskChoice();
     renderSoundSettings();
+    renderDayStart();
     $('backup-status').textContent = 'JSONを読み込みました。';
     if (!steps.length) showSettings();
   } catch (error) {

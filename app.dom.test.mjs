@@ -41,7 +41,7 @@ class Element {
   }
 }
 
-function mount(storage = new Map(), AudioContext = class { constructor() { throw new Error('audio unavailable'); } }) {
+function mount(storage = new Map(), AudioContext = class { constructor() { throw new Error('audio unavailable'); } }, initialNow = 1_000_000) {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map((match) => [match[1], new Element()]));
   const document = {
@@ -49,7 +49,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     createElement: (tag) => new Element(tag),
     body: new Element('body'),
   };
-  let now = 1_000_000;
+  let now = initialNow;
   let exportedBlob = null;
   const timeouts = [];
   const FakeDate = class extends Date { static now() { return now; } };
@@ -662,7 +662,7 @@ test('積み上げは時間と分で表示し、親子の内訳を分けて秒�
     steps: [], tasks: [], groups: [{ id: 'body', title: '人体', children: [{ id: 'hand', title: '手' }] }],
     sessions, totalWorkMs: 455_446_000, run: null,
   });
-  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]));
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]), undefined, +start);
   await elements.get('nav-growth').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '01:00');
   assert.equal(elements.get('growth-all-total').textContent, '全期間 126:30');
@@ -686,7 +686,7 @@ test('日付をまたぐ記録は選択日以外の日付と当日分の時間�
   const start = new Date(1_000_000);
   start.setHours(23, 30, 0, 0);
   const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
-    steps: [], tasks: [], groups: [], totalWorkMs: 5_400_000, run: null,
+    steps: [], tasks: [], groups: [], totalWorkMs: 5_400_000, run: null, dayStartMinutes: 0,
     sessions: [{ id: 'overnight', startedAt: +start, endedAt: +start + 5_400_000,
       workMs: 5_400_000, taskTitle: '夜の練習', targetId: null }],
   });
@@ -705,6 +705,78 @@ test('日付をまたぐ記録は選択日以外の日付と当日分の時間�
   assert.equal(new Date(elements.get('record-start').value).getTime(), +start);
   assert.equal(new Date(elements.get('record-end').value).getTime(), +start + 5_400_000);
   assert.equal(storage.get('practice-timer-v1'), original);
+});
+
+test('日のグラフは初期5時から24区間で表示し、区切りの変更・保存・復元ができる', async () => {
+  const now = new Date(2026, 10, 12, 4, 30).getTime();
+  const sessions = [
+    { id: 'midnight', startedAt: +new Date(2026, 10, 11, 23, 50),
+      endedAt: +new Date(2026, 10, 12, 0, 10), workMs: 1_200_000 },
+    { id: 'boundary', startedAt: +new Date(2026, 10, 12, 4, 50),
+      endedAt: +new Date(2026, 10, 12, 5, 10), workMs: 1_200_000 },
+    { id: 'legacy', startedAt: null, endedAt: +new Date(2026, 10, 11, 10), workMs: 600_000 },
+  ];
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], tasks: [], groups: [], sessions, totalWorkMs: 3_000_000, run: null });
+  const app = mount(new Map([['practice-timer-v1', original]]), undefined, now);
+  const { elements, storage } = app;
+  await elements.get('nav-growth').trigger('click');
+  assert.match(elements.get('period-label').textContent, /2026\/11\/11/);
+  assert.equal(elements.get('growth-total').textContent, '00:40');
+  const bars = elements.get('period-chart').children;
+  assert.equal(bars.length, 24);
+  assert.equal(bars[0].getAttribute('aria-label'), '05:00 ～ 06:00 00:00');
+  assert.equal(bars[23].getAttribute('aria-label'), '04:00 ～ 05:00 00:10');
+  assert.equal(elements.get('period-chart-max').textContent, '01:00');
+  assert.equal(elements.get('day-untimed').hidden, false);
+  assert.equal(elements.get('day-untimed').textContent, '開始時刻なし 00:10');
+  await elements.get('period-week').trigger('click');
+  assert.equal(elements.get('period-label').textContent, '2026/11/9 ～ 2026/11/15');
+  await elements.get('period-day').trigger('click');
+  await elements.get('period-next').trigger('click');
+  assert.equal(elements.get('growth-total').textContent, '00:10');
+  await elements.get('period-prev').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('day-start').value, '05:00');
+  elements.get('day-start').value = '00:00';
+  await elements.get('day-start').trigger('change');
+  assert.equal(JSON.parse(storage.get('practice-timer-v1')).dayStartMinutes, 0);
+  const restored = mount(storage, undefined, now);
+  await restored.elements.get('settings-toggle').trigger('click');
+  assert.equal(restored.elements.get('day-start').value, '00:00');
+  // 昼より遅い区切りでも前後移動とグラフからの移動で日付がずれない。
+  elements.get('day-start').value = '23:30';
+  await elements.get('day-start').trigger('change');
+  await elements.get('nav-growth').trigger('click');
+  assert.equal(elements.get('period-chart').children[0].getAttribute('aria-label'), '23:30 ～ 00:30 00:20');
+  await elements.get('period-next').trigger('click');
+  assert.match(elements.get('period-label').textContent, /2026\/11\/12/);
+  await elements.get('period-prev').trigger('click');
+  assert.match(elements.get('period-label').textContent, /2026\/11\/11/);
+  await elements.get('period-month').trigger('click');
+  await elements.get('period-chart').children[0].trigger('click');
+  assert.match(elements.get('period-label').textContent, /2026\/11\/1\(/);
+  assert.equal(elements.get('period-chart').children.length, 24);
+  await elements.get('settings-toggle').trigger('click');
+  await elements.get('export-data').trigger('click');
+  const backup = JSON.parse(await app.exportedBlob.text());
+  assert.equal(backup.dayStartMinutes, 1410);
+  assert.deepEqual(backup.sessions.map((record) => [record.startedAt, record.endedAt, record.workMs]),
+    sessions.map((record) => [record.startedAt, record.endedAt, record.workMs]));
+  backup.dayStartMinutes = 0;
+  elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
+  await elements.get('import-file').trigger('change');
+  assert.equal(elements.get('day-start').value, '00:00');
+  for (const invalid of [-1, 1440, 5.5, '05:00', null]) {
+    const before = storage.get('practice-timer-v1');
+    backup.dayStartMinutes = invalid;
+    await elements.get('import-file').trigger('change');
+    assert.match(elements.get('backup-status').textContent, /区切りの設定が不正/);
+    assert.equal(storage.get('practice-timer-v1'), before);
+  }
+  delete backup.dayStartMinutes;
+  await elements.get('import-file').trigger('change');
+  assert.equal(elements.get('day-start').value, '05:00');
 });
 
 test('繰り返し計測の一件削除と起動分削除で累計を再計算する', async () => {

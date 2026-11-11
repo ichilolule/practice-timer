@@ -46,17 +46,20 @@ function clearTargets(ids, tasks, sessions) {
   }
 }
 
-function periodBounds(kind, anchor) {
+function periodBounds(kind, anchor, dayStartMinutes = 0) {
   const start = new Date(anchor);
-  start.setHours(0, 0, 0, 0);
+  start.setHours(Math.floor(dayStartMinutes / 60), dayStartMinutes % 60, 0, 0);
+  if (anchor < start.getTime()) start.setDate(start.getDate() - 1);
   if (kind === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7);
   if (kind === 'month') start.setDate(1);
   if (kind === 'year') { start.setMonth(0, 1); }
+  start.setHours(Math.floor(dayStartMinutes / 60), dayStartMinutes % 60, 0, 0);
   const end = new Date(start);
   if (kind === 'week') end.setDate(end.getDate() + 7);
   else if (kind === 'month') end.setMonth(end.getMonth() + 1);
   else if (kind === 'year') end.setFullYear(end.getFullYear() + 1);
   else end.setDate(end.getDate() + 1);
+  end.setHours(Math.floor(dayStartMinutes / 60), dayStartMinutes % 60, 0, 0);
   return { start: start.getTime(), end: end.getTime() };
 }
 
@@ -65,18 +68,19 @@ function workInRange(session, start, end) {
   return Math.max(0, Math.min(session.endedAt, end) - Math.max(session.startedAt, start));
 }
 
-function periodBuckets(kind, anchor, sessions) {
-  if (kind === 'day') return [];
-  const bounds = periodBounds(kind, anchor);
+function periodBuckets(kind, anchor, sessions, dayStartMinutes = 0) {
+  const bounds = periodBounds(kind, anchor, dayStartMinutes);
   const buckets = [];
   let cursor = new Date(bounds.start);
   while (cursor.getTime() < bounds.end) {
     const start = cursor.getTime();
-    if (kind === 'year') cursor.setMonth(cursor.getMonth() + 1);
+    if (kind === 'day') cursor = new Date(Math.min(start + 3_600_000, bounds.end));
+    else if (kind === 'year') cursor.setMonth(cursor.getMonth() + 1);
     else cursor.setDate(cursor.getDate() + 1);
+    if (kind !== 'day') cursor.setHours(Math.floor(dayStartMinutes / 60), dayStartMinutes % 60, 0, 0);
     const end = cursor.getTime();
     buckets.push({ start, end, workMs: sessions.reduce((sum, session) =>
-      sum + workInRange(session, start, end), 0) });
+      sum + (kind === 'day' && session.startedAt == null ? 0 : workInRange(session, start, end)), 0) });
   }
   return buckets;
 }

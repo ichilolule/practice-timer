@@ -101,7 +101,11 @@
         <p class="growth-period-total"><span class="sr-only">選択期間の作業時間（時間:分）</span><span id="growth-total"></span></p>
         <p id="growth-all-total" class="subtle"></p>
       </div>
-      <div id="period-chart" class="period-chart"></div>
+      <div id="period-chart-layout" class="period-chart-layout">
+        <div class="period-axis" aria-hidden="true"><span id="period-chart-max"></span><span>00:00</span></div>
+        <div id="period-chart" class="period-chart" role="group" aria-label="作業時間のグラフ"></div>
+      </div>
+      <p id="day-untimed" class="subtle" hidden></p>
       <h3>育成項目の時間</h3>
       <div id="period-group-list"></div>
       <section id="day-records">
@@ -132,6 +136,12 @@
         <button id="cancel-settings" type="button">キャンセル</button>
       </div>
       <p id="settings-error" role="alert"></p>
+      <h2>積み上げ <span class="settings-hint">自動保存</span></h2>
+      <div class="day-boundary-setting">
+        <label for="day-start">1日の区切り</label>
+        <input id="day-start" type="time" step="60" value="05:00" required>
+      </div>
+      <p id="day-start-error" role="alert"></p>
       <h2>通知音 <span class="settings-hint">自動保存</span></h2>
       <div class="sound-settings">
         <div class="sound-field">
@@ -153,7 +163,7 @@
       <h2>バックアップ</h2>
       <button id="export-data" type="button">JSONを保存</button>
       <label class="import-label">JSONを読み込む <input id="import-file" type="file" accept=".json,application/json"></label>
-      <p class="subtle">読み込みは現在のタスク・時間・育成項目・タイマー設定・音の設定を置き換えます。計測中は読み込めません。</p>
+      <p class="subtle">読み込みは現在のタスク・時間・育成項目・各設定を置き換えます。計測中は読み込めません。</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
 
