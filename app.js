@@ -6,6 +6,7 @@ const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodB
 
 const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
+const DEFAULT_SOUND = { volume: 100, pitch: 0 };
 const $ = (id) => document.getElementById(id);
 let steps = [];
 let draft = [];
@@ -24,6 +25,8 @@ let periodKind = 'day';
 let periodAnchor = Date.now();
 let editingRecordId = null;
 let audioContext = null;
+let soundSettings = { ...DEFAULT_SOUND };
+let previewPlaying = false;
 let lastSaved = 0;
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -31,7 +34,7 @@ function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     if (saved.format === BACKUP_FORMAT) {
-      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId } = validateBackup(saved));
+      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings } = validateBackup(saved));
       return;
     }
     if (Array.isArray(saved.steps) && saved.steps.length) steps = normalizeSteps(saved.steps);
@@ -53,10 +56,12 @@ function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: BACKUP_FORMAT, version: 1,
       steps, run, totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
-      tasks, groups, sessions, selectedTaskId }));
+      tasks, groups, sessions, selectedTaskId, sound: soundSettings }));
     lastSaved = Date.now();
+    return true;
   } catch {
     $('status').textContent = 'ブラウザに保存できません。ストレージの設定を確認してください。';
+    return false;
   }
 }
 
@@ -716,6 +721,15 @@ function deleteRecord(group) {
   $('growth-status').textContent = `${targets.length}件の記録を削除しました。`;
 }
 
+function validateSound(raw) {
+  if (raw == null) return { ...DEFAULT_SOUND };
+  if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 100 ||
+      !Number.isInteger(raw.pitch) || raw.pitch < -12 || raw.pitch > 12) {
+    throw new Error('音の設定が不正です。');
+  }
+  return { volume: raw.volume, pitch: raw.pitch };
+}
+
 function validateBackup(raw) {
   if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== 1 ||
       !Array.isArray(raw.steps) || !Array.isArray(raw.tasks) ||
@@ -781,7 +795,7 @@ function validateBackup(raw) {
     ? raw.selectedTaskId : null;
   return { steps: restoredSteps, tasks: restoredTasks, groups: restoredGroups,
     sessions: restoredSessions, run: restoredRun, totalWorkMs: restoredTotal,
-    selectedTaskId: restoredSelection };
+    selectedTaskId: restoredSelection, sound: validateSound(raw.sound) };
 }
 
 function backupObject() {
@@ -789,7 +803,7 @@ function backupObject() {
   return { format: BACKUP_FORMAT, version: 1, steps, tasks, groups, sessions,
     totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
     run: run ? { ...run, status: 'paused', lastTick: null } : null,
-    selectedTaskId };
+    selectedTaskId, sound: soundSettings };
 }
 
 function showSettings() {
@@ -799,6 +813,7 @@ function showSettings() {
   $('permission-status').textContent = 'Notification' in window
     ? `通知の許可状態：${Notification.permission}` : 'この環境では通知を利用できません。';
   renderSettings();
+  renderSoundSettings();
   $('import-file').disabled = Boolean(run);
   switchView('settings');
 }
@@ -818,22 +833,65 @@ async function prepareAudio() {
 }
 
 function playSound(phase) {
-  if (!audioContext || audioContext.state !== 'running') return;
+  if (!soundSettings.volume || !audioContext || audioContext.state !== 'running') return 0;
   const start = audioContext.currentTime;
   const frequencies = phase === 'work' ? [660, 880] : [659.25, 554.37, 440];
+  const speed = phase === 'rest' ? 1.5 : 1;
+  const pitchRatio = 2 ** (soundSettings.pitch / 12);
+  const peakGain = 0.16 * soundSettings.volume / 100;
   frequencies.forEach((frequency, index) => {
-    const at = start + index * 0.27;
+    const at = start + index * 0.27 / speed;
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
     oscillator.type = 'sine';
-    oscillator.frequency.value = frequency;
+    oscillator.frequency.value = frequency * pitchRatio;
     gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
+    gain.gain.exponentialRampToValueAtTime(peakGain, at + 0.02 / speed);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.2 / speed);
     oscillator.connect(gain).connect(audioContext.destination);
     oscillator.start(at);
-    oscillator.stop(at + 0.21);
+    oscillator.stop(at + 0.21 / speed);
   });
+  return ((frequencies.length - 1) * 0.27 + 0.21) / speed;
+}
+
+function renderSoundSettings() {
+  $('sound-volume').value = String(soundSettings.volume);
+  $('sound-pitch').value = String(soundSettings.pitch);
+  $('sound-volume-value').textContent = soundSettings.volume ? `${soundSettings.volume}%` : '0%（消音）';
+  $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? '標準'
+    : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)}半音`;
+  $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
+  $('sound-pitch').setAttribute('aria-valuetext', soundSettings.pitch === 0 ? '標準'
+    : `標準より${Math.abs(soundSettings.pitch)}半音${soundSettings.pitch > 0 ? '高い' : '低い'}`);
+  $('preview-work').disabled = $('preview-rest').disabled = previewPlaying || soundSettings.volume === 0;
+}
+
+function updateSoundSettings(save = false) {
+  soundSettings = validateSound({ volume: Number($('sound-volume').value), pitch: Number($('sound-pitch').value) });
+  renderSoundSettings();
+  if (save) $('sound-status').textContent = persist() ? '' : '音の設定を保存できませんでした。';
+  if (save && run && soundSettings.volume) {
+    void prepareAudio().then((ready) => {
+      if (!ready && !$('sound-status').textContent) $('sound-status').textContent = '音を再生できませんでした。';
+    });
+  }
+}
+
+async function previewSound(phase) {
+  if (previewPlaying || soundSettings.volume === 0) return;
+  previewPlaying = true;
+  $('sound-status').textContent = '';
+  renderSoundSettings();
+  try {
+    if (!await prepareAudio()) throw new Error('音を再生できませんでした。');
+    const duration = playSound(phase);
+    setTimeout(() => { previewPlaying = false; renderSoundSettings(); }, Math.ceil(duration * 1000) + 50);
+  } catch {
+    previewPlaying = false;
+    renderSoundSettings();
+    $('sound-status').textContent = '音を再生できませんでした。';
+  }
 }
 
 function notifyPhase(phase) {
@@ -860,6 +918,12 @@ function handleEvent(event) {
 }
 
 $('settings-toggle').addEventListener('click', showSettings);
+for (const id of ['sound-volume', 'sound-pitch']) {
+  $(id).addEventListener('input', () => updateSoundSettings());
+  $(id).addEventListener('change', () => updateSoundSettings(true));
+}
+$('preview-work').addEventListener('click', () => previewSound('work'));
+$('preview-rest').addEventListener('click', () => previewSound('rest'));
 for (const view of ['timer', 'tasks', 'growth']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
@@ -963,7 +1027,7 @@ $('cancel-settings').addEventListener('click', () => { settingsDraftActive = fal
 $('main-action').addEventListener('click', () => {
   if (!run && !steps.length) { showSettings(); return; }
   if (!run) {
-    const audioReady = prepareAudio();
+    const audioReady = soundSettings.volume ? prepareAudio() : Promise.resolve(true);
     run = createRun(steps, totalWorkMs, Date.now());
     run.recordGroupId = newId();
     const startedRun = run;
@@ -976,7 +1040,7 @@ $('main-action').addEventListener('click', () => {
   } else if (run.status === 'running') {
     handleEvent(pauseRun(run, Date.now()));
   } else {
-    void prepareAudio();
+    if (soundSettings.volume) void prepareAudio();
     resumeRun(run, Date.now());
   }
   persist();
@@ -1050,7 +1114,7 @@ $('import-file').addEventListener('change', async () => {
     if (file.size > 5_000_000) throw new Error('5MBを超えるJSONは読み込めません。');
     const next = validateBackup(JSON.parse(await file.text()));
     if (!confirm('現在のデータをJSONの内容で置き換えますか？')) return;
-    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId } = next);
+    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings } = next);
     settingsDraftActive = false;
     taskUndo = null;
     $('task-undo').hidden = true;
@@ -1059,6 +1123,7 @@ $('import-file').addEventListener('change', async () => {
     resetTaskForm();
     renderTimer();
     renderTaskChoice();
+    renderSoundSettings();
     $('backup-status').textContent = 'JSONを読み込みました。';
     if (!steps.length) showSettings();
   } catch (error) {

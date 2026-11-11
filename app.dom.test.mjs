@@ -41,7 +41,7 @@ class Element {
   }
 }
 
-function mount(storage = new Map()) {
+function mount(storage = new Map(), AudioContext = class { constructor() { throw new Error('audio unavailable'); } }) {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map((match) => [match[1], new Element()]));
   const document = {
@@ -51,6 +51,7 @@ function mount(storage = new Map()) {
   };
   let now = 1_000_000;
   let exportedBlob = null;
+  const timeouts = [];
   const FakeDate = class extends Date { static now() { return now; } };
   const context = vm.createContext({
     document,
@@ -58,10 +59,10 @@ function mount(storage = new Map()) {
       getItem: (key) => storage.get(key) ?? null,
       setItem: (key, value) => storage.set(key, value),
     },
-    window: { AudioContext: class { constructor() { throw new Error('audio unavailable'); } } },
+    window: { AudioContext },
     addEventListener() {},
     setInterval() {},
-    setTimeout() {},
+    setTimeout(callback) { timeouts.push(callback); },
     confirm: () => true,
     prompt: () => null,
     Blob,
@@ -71,8 +72,122 @@ function mount(storage = new Map()) {
   for (const file of ['timer-core.js', 'practice-data.js', 'app.js']) {
     vm.runInContext(readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), context);
   }
-  return { elements, storage, advance(ms) { now += ms; }, get exportedBlob() { return exportedBlob; } };
+  return { elements, storage, advance(ms) { now += ms; },
+    flushTimeouts() { for (const callback of timeouts.splice(0)) callback(); },
+    get exportedBlob() { return exportedBlob; } };
 }
+
+function recordAudio() {
+  const notes = [];
+  const gains = [];
+  class AudioContext {
+    constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
+    async resume() {}
+    createOscillator() {
+      const note = { frequency: { value: 0 }, connect() { return this; },
+        start(at) { this.startedAt = at; }, stop(at) { this.stoppedAt = at; } };
+      notes.push(note);
+      return note;
+    }
+    createGain() {
+      const events = [];
+      gains.push(events);
+      return { connect() {}, gain: {
+        setValueAtTime(value, at) { events.push({ value, at }); },
+        exponentialRampToValueAtTime(value, at) { events.push({ value, at }); },
+      } };
+    }
+  }
+  return { AudioContext, notes, gains };
+}
+
+test('通知音の音量・高さを共通設定し、2音と3音をほぼ同じ長さで試聴できる', async () => {
+  const audio = recordAudio();
+  const app = mount(new Map(), audio.AudioContext);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  elements.get('sound-volume').value = '50';
+  await elements.get('sound-volume').trigger('input');
+  await elements.get('sound-volume').trigger('change');
+  elements.get('sound-pitch').value = '12';
+  await elements.get('sound-pitch').trigger('input');
+  await elements.get('sound-pitch').trigger('change');
+  await elements.get('preview-work').trigger('click');
+  assert.equal(audio.notes.length, 2);
+  assert.deepEqual(audio.notes.map(note => note.frequency.value), [1320, 1760]);
+  assert.equal(audio.gains[0][1].value, 0.08);
+  assert.equal(audio.notes[1].stoppedAt, 0.48);
+  assert.equal(elements.get('preview-rest').disabled, true);
+  await elements.get('preview-rest').trigger('click');
+  assert.equal(audio.notes.length, 2);
+  app.flushTimeouts();
+  await elements.get('preview-rest').trigger('click');
+  assert.equal(audio.notes.length, 5);
+  assert.deepEqual(audio.notes.slice(2).map(note => note.frequency.value), [1318.5, 1108.74, 880]);
+  assert.ok(Math.abs(audio.notes[4].stoppedAt - 0.50) < 1e-9);
+  assert.ok(audio.notes.every(note => note.stoppedAt > note.startedAt));
+  assert.ok(audio.gains.every(events => events.every(event => event.value > 0)));
+  const restored = mount(app.storage).elements;
+  await restored.get('settings-toggle').trigger('click');
+  assert.equal(restored.get('sound-volume').value, '50');
+  assert.equal(restored.get('sound-pitch').value, '12');
+  await elements.get('export-data').trigger('click');
+  const backup = JSON.parse(await app.exportedBlob.text());
+  assert.deepEqual(backup.sound, { volume: 50, pitch: 12 });
+  backup.sound = { volume: 35, pitch: -12 };
+  elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
+  await elements.get('import-file').trigger('change');
+  assert.equal(elements.get('sound-volume').value, '35');
+  assert.equal(elements.get('sound-pitch').value, '-12');
+  assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '標準より12半音低い');
+  const beforeInvalid = app.storage.get('practice-timer-v1');
+  backup.sound.pitch = 99;
+  await elements.get('import-file').trigger('change');
+  assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
+  assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
+});
+
+test('音量0は完全に消音し、音を準備できない環境でも計測を開始できる', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
+  })]]);
+  const app = mount(storage);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  elements.get('sound-volume').value = '0';
+  await elements.get('sound-volume').trigger('change');
+  assert.equal(elements.get('preview-work').disabled, true);
+  assert.equal(elements.get('sound-volume-value').textContent, '0%（消音）');
+  await elements.get('nav-timer').trigger('click');
+  await elements.get('main-action').trigger('click');
+  await elements.get('skip').trigger('click');
+  assert.equal(elements.get('status').textContent, '');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
+  const audio = recordAudio();
+  const muted = mount(storage, audio.AudioContext);
+  await muted.elements.get('settings-toggle').trigger('click');
+  await muted.elements.get('preview-work').trigger('click');
+  assert.equal(audio.notes.length, 0);
+  muted.elements.get('sound-volume').value = '50';
+  await muted.elements.get('sound-volume').trigger('change');
+  await muted.elements.get('skip').trigger('click');
+  assert.equal(audio.notes.length, 2);
+  assert.equal(audio.gains[0][1].value, 0.08);
+});
+
+test('音の設定を含まない旧バックアップは標準音を使い、試聴できない場合はエラーを表示する', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [],
+    run: null, totalWorkMs: 0, selectedTaskId: null,
+  })]]);
+  const { elements } = mount(storage);
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('sound-volume').value, '100');
+  assert.equal(elements.get('sound-pitch').value, '0');
+  await elements.get('preview-rest').trigger('click');
+  assert.match(elements.get('sound-status').textContent, /音を再生できません/);
+  assert.equal(elements.get('preview-rest').disabled, false);
+});
 
 function buttonNamed(element, label) {
   for (const child of element.children) {
