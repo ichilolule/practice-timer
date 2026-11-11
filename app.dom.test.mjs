@@ -8,6 +8,7 @@ class Element {
     this.tagName = tagName;
     this.children = [];
     this.listeners = new Map();
+    this.attributes = new Map();
     this.hidden = false;
     this.disabled = false;
     this.open = false;
@@ -19,8 +20,9 @@ class Element {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   addEventListener(type, handler) { this.listeners.set(type, handler); }
-  setAttribute() {}
-  removeAttribute() {}
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  removeAttribute(name) { this.attributes.delete(name); }
   focus() {}
   click() {}
   remove() {}
@@ -81,6 +83,57 @@ function buttonNamed(element, label) {
   return null;
 }
 
+test('下部の設定から別の画面へ移動しても入力を保ち、キャンセルで元に戻せる', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
+  })]]);
+  const { elements } = mount(storage);
+  await elements.get('settings-toggle').trigger('click');
+  const input = elements.get('step-list').children[0].querySelector('input');
+  input.value = '30';
+  await input.trigger('input');
+  await elements.get('nav-tasks').trigger('click');
+  assert.equal(elements.get('nav-tasks').getAttribute('aria-current'), 'page');
+  assert.equal(elements.get('settings-toggle').getAttribute('aria-current'), null);
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('primary-nav').hidden, false);
+  assert.equal(elements.get('settings-toggle').getAttribute('aria-current'), 'page');
+  assert.equal(elements.get('step-list').children[0].querySelector('input').value, '30');
+  await elements.get('cancel-settings').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('step-list').children[0].querySelector('input').value, 25);
+});
+
+test('通常の開始説明を省き、音の失敗は工程移行後も残し、再読込は停止アイコンで示す', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
+  })]]);
+  const { elements } = mount(storage);
+  assert.equal(elements.get('active-task-hint').hidden, true);
+  const starting = elements.get('main-action').trigger('click');
+  assert.equal(elements.get('status').textContent, '');
+  await starting;
+  assert.match(elements.get('status').textContent, /音を準備できません/);
+  await elements.get('skip').trigger('click');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
+  assert.match(elements.get('status').textContent, /音を準備できません/);
+  const restored = mount(storage).elements;
+  assert.equal(restored.get('status').textContent, '');
+  assert.equal(restored.get('phase-name').getAttribute('aria-label'), '休憩・一時停止中');
+  assert.equal(restored.get('phase-paused').hidden, false);
+  assert.equal(restored.get('main-action').getAttribute('aria-label'), '再開');
+});
+
+test('保存失敗は音の失敗で上書きしない', async () => {
+  const storage = {
+    get() { return JSON.stringify({ steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0 }); },
+    set() { throw new Error('storage full'); },
+  };
+  const { elements } = mount(storage);
+  await elements.get('main-action').trigger('click');
+  assert.match(elements.get('status').textContent, /ブラウザに保存できません/);
+});
+
 test('HTMLを直接開く構成で追加・保存・開始・次へが動く', async () => {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   assert.match(html, /<script defer src="timer-core\.js"><\/script>/);
@@ -93,7 +146,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   const { elements, storage } = mount();
 
   assert.equal(elements.get('timer-view').hidden, false);
-  assert.equal(elements.get('main-action').textContent, '手順を設定');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), '手順を設定');
   assert.equal(elements.get('skip').hidden, true);
   assert.equal(elements.get('end').hidden, true);
   await elements.get('main-action').trigger('click');
@@ -122,20 +175,25 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   assert.equal(elements.get('main-action').disabled, false);
   assert.equal(elements.get('clock').textContent, '00:06');
   const startClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('phase-name').textContent, '作業');
-  assert.equal(elements.get('main-action').textContent, '一時停止');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '作業中');
+  assert.equal(elements.get('phase-icon').getAttribute('href'), '#icon-work');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), '一時停止');
+  assert.equal(elements.get('main-action-icon').getAttribute('href'), '#icon-pause');
   assert.equal(elements.get('skip').hidden, false);
-  assert.equal(elements.get('skip').textContent, '休憩へ進む');
-  assert.equal(elements.get('timer-state').textContent, '計測中');
+  assert.equal(elements.get('skip').getAttribute('aria-label'), '休憩へ進む');
+  assert.equal(elements.get('phase-paused').hidden, true);
   const pauseClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('main-action').textContent, '再開');
-  assert.equal(elements.get('timer-state').textContent, '一時停止中');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), '再開');
+  assert.equal(elements.get('main-action-icon').getAttribute('href'), '#icon-play');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '作業・一時停止中');
+  assert.equal(elements.get('phase-paused').hidden, false);
   const resumeClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('main-action').textContent, '一時停止');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), '一時停止');
   await Promise.all([startClick, pauseClick, resumeClick]);
   await elements.get('skip').trigger('click');
-  assert.equal(elements.get('phase-name').textContent, '休憩');
-  assert.equal(elements.get('skip').textContent, '次の作業へ');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
+  assert.equal(elements.get('phase-icon').getAttribute('href'), '#icon-rest');
+  assert.equal(elements.get('skip').getAttribute('aria-label'), '次の作業へ');
   assert.ok(storage.has('practice-timer-v1'));
 });
 
@@ -208,7 +266,7 @@ test('タスクの後選択、日別記録の割り当て、文字JSONの保存�
   elements.get('import-file').files = [{ size: app.exportedBlob.size, text: () => app.exportedBlob.text() }];
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /読み込みました/);
-  assert.equal(elements.get('status').textContent, 'JSONを読み込みました。');
+  assert.equal(elements.get('status').textContent, '');
   const beforeInvalidImport = storage.get('practice-timer-v1');
   elements.get('import-file').files = [{ size: 20, text: async () => '{"format":"wrong"}' }];
   await elements.get('import-file').trigger('change');

@@ -9,6 +9,7 @@ const BACKUP_FORMAT = 'practice-timer-beta';
 const $ = (id) => document.getElementById(id);
 let steps = [];
 let draft = [];
+let settingsDraftActive = false;
 let run = null;
 let totalWorkMs = 0;
 let tasks = [];
@@ -71,11 +72,17 @@ function timeText(ms, roundUp = false) {
 
 function renderTimer() {
   const activeSteps = run?.steps ?? steps;
-  $('phase-name').textContent = run ? (run.phase === 'work' ? '作業' : '休憩')
-    : activeSteps.length ? '開始できます' : '手順を設定してください';
-  $('clock').textContent = timeText(run?.remainingMs ?? ((steps[0]?.minutes || 0) * 60_000), true);
-  $('timer-state').textContent = run ? (run.status === 'running' ? '計測中' : '一時停止中') : '';
-  $('main-action').textContent = run?.status === 'running' ? '一時停止' : run ? '再開' : steps.length ? '開始' : '手順を設定';
+  const phase = run?.phase ?? activeSteps[0]?.type;
+  const phaseLabel = phase === 'work' ? '作業' : '休憩';
+  const stateLabel = run ? (run.status === 'running' ? '中' : '・一時停止中') : 'の準備';
+  labelControl($('phase-name'), phase ? phaseLabel + stateLabel : '手順未設定');
+  $('phase-icon').setAttribute('href', `#icon-${phase === 'work' ? 'work' : phase ? 'rest' : 'settings'}`);
+  $('phase-paused').hidden = run?.status !== 'paused';
+  const remainingMs = run?.remainingMs ?? ((steps[0]?.minutes || 0) * 60_000);
+  $('clock').textContent = timeText(remainingMs, true);
+  $('clock').classList.toggle('has-hours', remainingMs >= 3_600_000);
+  labelControl($('main-action'), run?.status === 'running' ? '一時停止' : run ? '再開' : steps.length ? '開始' : '手順を設定');
+  $('main-action-icon').setAttribute('href', `#icon-${run?.status === 'running' ? 'pause' : run || steps.length ? 'play' : 'settings'}`);
   $('main-action').disabled = false;
   $('skip').hidden = !run;
   $('end').hidden = !run;
@@ -84,8 +91,13 @@ function renderTimer() {
   if (run) {
     const nextType = !run.looping && run.row < run.steps.length - 1
       ? run.steps[run.row + 1].type : run.phase === 'work' ? 'rest' : 'work';
-    $('skip').textContent = nextType === 'work' ? '次の作業へ' : '休憩へ進む';
+    labelControl($('skip'), nextType === 'work' ? '次の作業へ' : '休憩へ進む');
   }
+}
+
+function labelControl(element, label) {
+  if (element.getAttribute('aria-label') !== label) element.setAttribute('aria-label', label);
+  element.title = label;
 }
 
 function appendOption(select, value, label) {
@@ -97,10 +109,12 @@ function appendOption(select, value, label) {
 
 function renderTaskChoice() {
   const task = tasks.find((item) => item.id === selectedTaskId);
-  $('active-task-name').textContent = task?.title || '未選択';
-  $('active-task-hint').textContent = task ? task.firstStep
-    : run ? '選ぶ前の作業時間も、選んだタスクに加算します。' : '開始前にも、開始後にもタスクを選べます。';
-  $('active-task-hint').hidden = Boolean(task && !task.firstStep);
+  $('active-task-name').textContent = task?.title || '';
+  $('active-task-name').title = task?.title || '';
+  $('active-task-name').hidden = !task;
+  $('active-task-hint').textContent = task?.firstStep || '';
+  $('active-task-hint').title = task?.firstStep || '';
+  $('active-task-hint').hidden = !task?.firstStep;
   $('choose-task').textContent = task && !run ? 'タスクを選び直す' : 'タスクを選ぶ';
   $('choose-task').disabled = Boolean(run && selectedTaskId);
   $('task-choice-actions').hidden = Boolean(run && selectedTaskId);
@@ -137,11 +151,10 @@ function renderTaskPicker() {
 
 function switchView(name) {
   for (const view of ['timer', 'tasks', 'growth', 'settings']) $(`${view}-view`).hidden = view !== name;
-  $('primary-nav').hidden = name === 'settings';
-  $('settings-toggle').hidden = name !== 'timer';
-  for (const view of ['timer', 'tasks', 'growth']) {
-    if (view === name) $(`nav-${view}`).setAttribute('aria-current', 'page');
-    else $(`nav-${view}`).removeAttribute('aria-current');
+  for (const view of ['timer', 'tasks', 'growth', 'settings']) {
+    const button = view === 'settings' ? $('settings-toggle') : $(`nav-${view}`);
+    if (view === name) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
   }
   if (name === 'timer') { renderTimer(); renderTaskChoice(); }
   if (name === 'tasks') renderTasks();
@@ -293,7 +306,6 @@ function saveTask(selectAfter) {
   const message = updating ? 'タスクを更新しました。' : selectedTaskId === task.id && selectAfter
     ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
   $('task-status').textContent = message;
-  if (!$('timer-view').hidden) $('status').textContent = message;
   if (!$('tasks-view').hidden) document.getElementById(`task-title-${task.id}`)?.focus();
   else if (!$('timer-view').hidden) $('main-action').focus();
 }
@@ -308,7 +320,6 @@ function addQuickTask(title, selectAfter = false) {
   const message = selectedTaskId === task.id
     ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
   $('task-status').textContent = message;
-  if (!$('timer-view').hidden) $('status').textContent = message;
   if (!$('timer-view').hidden && run && selectedTaskId === task.id) $('main-action').focus();
 }
 
@@ -782,7 +793,8 @@ function backupObject() {
 }
 
 function showSettings() {
-  draft = steps.map((step) => ({ ...step }));
+  if (!settingsDraftActive) draft = steps.map((step) => ({ ...step }));
+  settingsDraftActive = true;
   $('settings-error').textContent = '';
   $('permission-status').textContent = 'Notification' in window
     ? `通知の許可状態：${Notification.permission}` : 'この環境では通知を利用できません。';
@@ -839,9 +851,8 @@ function notifyPhase(phase) {
 function handleEvent(event) {
   if (!event) return;
   if (event.kind === 'interrupted') {
-    $('status').textContent = '長時間の中断を検出しました。続きから再開してください。';
+    $('status').textContent = '長時間の中断を検出したため一時停止しました。';
   } else {
-    $('status').textContent = event.phase === 'work' ? '作業を開始しました。' : '休憩を開始しました。';
     playSound(event.phase);
     notifyPhase(event.phase);
   }
@@ -939,14 +950,15 @@ $('add-step').addEventListener('click', () => {
 $('save-settings').addEventListener('click', () => {
   try {
     steps = normalizeSteps(draft);
+    settingsDraftActive = false;
+    if (run) $('status').textContent = '設定変更は次の開始から反映します。';
     persist();
-    $('status').textContent = run ? '設定を保存しました。次の開始から反映されます。' : '設定を保存しました。';
     showTimer();
   } catch (error) {
     $('settings-error').textContent = error.message;
   }
 });
-$('cancel-settings').addEventListener('click', showTimer);
+$('cancel-settings').addEventListener('click', () => { settingsDraftActive = false; showTimer(); });
 
 $('main-action').addEventListener('click', () => {
   if (!run && !steps.length) { showSettings(); return; }
@@ -955,19 +967,17 @@ $('main-action').addEventListener('click', () => {
     run = createRun(steps, totalWorkMs, Date.now());
     run.recordGroupId = newId();
     const startedRun = run;
-    $('status').textContent = run.phase === 'work' ? '作業を開始しました。' : '休憩を開始しました。';
+    $('status').textContent = '';
     audioReady.then((ready) => {
       if (run !== startedRun || run.status !== 'running' || run.row !== 0 || run.looping) return;
       if (ready) playSound(startedRun.phase);
-      else $('status').textContent = '音を準備できませんでした。タイマーは続行中です。';
+      else if (!$('status').textContent) $('status').textContent = '音を準備できませんでした。タイマーは続行中です。';
     });
   } else if (run.status === 'running') {
     handleEvent(pauseRun(run, Date.now()));
-    $('status').textContent = '一時停止しました。';
   } else {
     void prepareAudio();
     resumeRun(run, Date.now());
-    $('status').textContent = '再開しました。';
   }
   persist();
   renderTimer();
@@ -998,7 +1008,7 @@ $('end').addEventListener('click', () => {
   }
   run = null;
   selectedTaskId = null;
-  $('status').textContent = `終了しました。今回 ${timeText(gainedMs)}｜累計 ${timeText(totalWorkMs)}`;
+  $('status').textContent = `記録 ${timeText(gainedMs)}`;
   persist();
   renderTimer();
   renderTaskChoice();
@@ -1041,13 +1051,14 @@ $('import-file').addEventListener('change', async () => {
     const next = validateBackup(JSON.parse(await file.text()));
     if (!confirm('現在のデータをJSONの内容で置き換えますか？')) return;
     ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId } = next);
+    settingsDraftActive = false;
     taskUndo = null;
     $('task-undo').hidden = true;
+    $('status').textContent = '';
     persist();
     resetTaskForm();
     renderTimer();
     renderTaskChoice();
-    $('status').textContent = 'JSONを読み込みました。';
     $('backup-status').textContent = 'JSONを読み込みました。';
     if (!steps.length) showSettings();
   } catch (error) {
@@ -1064,7 +1075,6 @@ addEventListener('beforeunload', () => {
 
 load();
 switchView('timer');
-if (run) $('status').textContent = '前回の続きは一時停止しています。再開できます。';
 setInterval(() => {
   if (!run || run.status !== 'running') return;
   handleEvent(advanceClock(run, Date.now()));
