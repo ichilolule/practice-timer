@@ -645,7 +645,7 @@ test('既存タイマーの累計はテーマ未設定の記録として一度�
   assert.equal(second.elements.get('record-list').children.length, 1);
 });
 
-test('積み上げは時間と分で表示し、親子の内訳を分けて秒の精度を保持する', async () => {
+test('積み上げとテーマの時間表示を分け、秒の精度を保持する', async () => {
   const start = new Date(1_000_000);
   start.setHours(10, 0, 0, 0);
   const sessions = [
@@ -666,10 +666,15 @@ test('積み上げは時間と分で表示し、親子の内訳を分けて秒�
   await elements.get('nav-growth').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '01:00');
   assert.equal(elements.get('growth-all-total').textContent, '全期間 126:30');
-  const group = elements.get('period-group-list').children[0];
-  assert.deepEqual(group.children[0].children.map((item) => item.textContent), ['人体', '01:00']);
-  assert.deepEqual(group.children[1].children.map((row) => row.children.map((item) => item.textContent)),
-    [['手', '00:25'], ['サブテーマなし', '00:34']]);
+  await elements.get('nav-themes').trigger('click');
+  await elements.get('theme-period-day').trigger('click');
+  const group = elements.get('group-list').children[0];
+  assert.deepEqual(group.children[0].children[0].children[0].children.map((item) => item.textContent), ['人体', '1h 00m']);
+  const child = group.querySelector('tbody').children[0];
+  assert.equal(child.children[0].textContent, '手');
+  assert.equal(child.children[2].textContent, '0h 25m');
+  assert.equal(group.children[1].children[1].textContent, 'サブテーマなし 0h 34m');
+  await elements.get('nav-growth').trigger('click');
   const records = elements.get('record-list').children;
   assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '00:25']);
   assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
@@ -680,6 +685,96 @@ test('積み上げは時間と分で表示し、親子の内訳を分けて秒�
   const legacy = elements.get('record-list').children[0];
   assert.equal(legacy.children[1].children[0].textContent, '開始時刻なし ～ 10:00');
   assert.equal(storage.get('practice-timer-v1'), original);
+});
+
+test('テーマの横棒は共通目盛りで0時間も示し、サブテーマの最長時間を目安にする', async () => {
+  const now = +new Date(2026, 10, 12, 12);
+  const groups = [
+    { id: 'practice', title: '実践練習', children: [] },
+    { id: 'color', title: '配色', children: [
+      { id: 'light', title: '明暗' }, { id: 'hue', title: '色相' }, { id: 'contrast', title: '対比' },
+    ] },
+    { id: 'composition', title: '構図', children: [] },
+  ];
+  const sessions = [
+    { id: 'practice-record', startedAt: null, endedAt: now, workMs: 360_000_000, targetId: 'practice' },
+    { id: 'light-record', startedAt: null, endedAt: now, workMs: 9_000_000, targetId: 'light' },
+    { id: 'hue-record', startedAt: null, endedAt: now - 86_400_000, workMs: 10_800_000, targetId: 'hue' },
+  ];
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], tasks: [], groups, sessions, totalWorkMs: 379_800_000, run: null });
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]), undefined, now);
+  await elements.get('nav-themes').trigger('click');
+  assert.equal(elements.get('themes-view').hidden, false);
+  assert.equal(elements.get('growth-view').hidden, true);
+  assert.equal(elements.get('nav-themes').getAttribute('aria-current'), 'page');
+  assert.equal(elements.get('theme-period-all').getAttribute('aria-pressed'), 'true');
+  assert.equal(elements.get('theme-scale-max').textContent, '100h 00m');
+  const cards = elements.get('group-list').children;
+  assert.equal(cards.length, 3);
+  const practiceBar = cards[0].children[0].children[0];
+  const colorBar = cards[1].children[0].children[0];
+  const compositionBar = cards[2].children[0].children[0];
+  assert.equal(practiceBar.children[0].children[1].textContent, '100h 00m');
+  assert.equal(practiceBar.children[1].children[0].style.width, '100%');
+  assert.equal(colorBar.children[0].children[1].textContent, '5h 30m');
+  assert.equal(colorBar.children[1].children[0].style.width, '5.5%');
+  assert.equal(compositionBar.children[0].children[1].textContent, '0h 00m');
+  assert.equal(compositionBar.children[1].children[0].style.width, '0%');
+  assert.equal(cards[1].children[1].children[0].children[1].textContent, '目安 3h 00m');
+  const subRows = cards[1].querySelector('tbody').children;
+  assert.deepEqual(subRows.map((row) => row.children[2].textContent), ['2h 30m', '3h 00m', '0h 00m']);
+  assert.equal(subRows[0].children[1].children[0].children[0].style.width, `${2.5 / 3 * 100}%`);
+  assert.equal(subRows[2].children[1].children[0].children[0].style.width, '0%');
+  assert.ok(subRows.every((row) => row.children[1].children[1].style.left === '100%'));
+  cards[1].open = true;
+  await cards[1].trigger('toggle');
+  await elements.get('theme-period-day').trigger('click');
+  const todayColor = elements.get('group-list').children[1];
+  assert.equal(todayColor.open, true);
+  assert.equal(todayColor.children[1].children[0].children[1].textContent, '目安 2h 30m');
+  assert.deepEqual(todayColor.querySelector('tbody').children.map((row) => row.children[2].textContent),
+    ['2h 30m', '0h 00m', '0h 00m']);
+  await elements.get('theme-period-prev').trigger('click');
+  assert.match(elements.get('theme-period-label').textContent, /2026\/11\/11/);
+  await elements.get('nav-timer').trigger('click');
+  await elements.get('nav-themes').trigger('click');
+  assert.equal(elements.get('group-list').children[1].open, true);
+  assert.equal(storage.get('practice-timer-v1'), original);
+});
+
+test('テーマとサブテーマの名前はアプリ内で変更でき、記録と時間を保つ', async () => {
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], tasks: [], run: null, totalWorkMs: 600_000,
+    groups: [{ id: 'theme', title: '人体', children: [{ id: 'subtheme', title: '手' }] }],
+    sessions: [{ id: 'record', startedAt: null, endedAt: 1_000_000, workMs: 600_000, targetId: 'subtheme' }],
+  });
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]));
+  await elements.get('nav-themes').trigger('click');
+  const findRename = (card, name) => {
+    const visit = (node) => node.getAttribute('aria-label') === name ? node
+      : node.children.map(visit).find(Boolean);
+    return visit(card);
+  };
+  await findRename(elements.get('group-list').children[0], '人体の名前を変更').trigger('click');
+  assert.equal(elements.get('theme-name-dialog').open, true);
+  assert.equal(elements.get('theme-name-title').textContent, 'テーマの名前');
+  elements.get('theme-name').value = '  ';
+  await elements.get('theme-name-form').trigger('submit');
+  assert.match(elements.get('theme-name-error').textContent, /1〜60文字/);
+  assert.equal(storage.get('practice-timer-v1'), original);
+  elements.get('theme-name').value = '人体練習';
+  await elements.get('theme-name-form').trigger('submit');
+  assert.equal(elements.get('theme-name-dialog').open, false);
+  await findRename(elements.get('group-list').children[0], '手の名前を変更').trigger('click');
+  assert.equal(elements.get('theme-name-title').textContent, 'サブテーマの名前');
+  elements.get('theme-name').value = '手の形';
+  await elements.get('theme-name-form').trigger('submit');
+  const saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.groups[0].title, '人体練習');
+  assert.equal(saved.groups[0].children[0].title, '手の形');
+  assert.equal(saved.sessions[0].targetId, 'subtheme');
+  assert.equal(saved.totalWorkMs, 600_000);
 });
 
 test('日付をまたぐ記録は選択日以外の日付と当日分の時間を表示する', async () => {

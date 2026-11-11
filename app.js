@@ -26,7 +26,11 @@ let taskEditorSource = null;
 let taskUndo = null;
 let periodKind = 'day';
 let periodAnchor = Date.now();
+let themePeriodKind = 'all';
+let themePeriodAnchor = Date.now();
+const openThemeIds = new Set();
 let editingRecordId = null;
+let renamingThemeItem = null;
 let audioContext = null;
 let soundSettings = { ...DEFAULT_SOUND };
 let dayStartMinutes = DEFAULT_DAY_START;
@@ -159,8 +163,8 @@ function renderTaskPicker() {
 }
 
 function switchView(name) {
-  for (const view of ['timer', 'tasks', 'growth', 'settings']) $(`${view}-view`).hidden = view !== name;
-  for (const view of ['timer', 'tasks', 'growth', 'settings']) {
+  for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) $(`${view}-view`).hidden = view !== name;
+  for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) {
     const button = view === 'settings' ? $('settings-toggle') : $(`nav-${view}`);
     if (view === name) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -168,6 +172,7 @@ function switchView(name) {
   if (name === 'timer') { renderTimer(); renderTaskChoice(); }
   if (name === 'tasks') renderTasks();
   if (name === 'growth') renderGrowth();
+  if (name === 'themes') renderThemes();
 }
 
 function typeField(value, index) {
@@ -435,16 +440,31 @@ function renderTasks() {
 }
 
 function renameItem(item, label) {
-  const next = prompt(`${label}の名前`, item.title);
-  if (next === null) return;
-  const title = next.trim();
-  if (!title || title.length > 60) return;
-  item.title = title;
+  renamingThemeItem = item;
+  $('theme-name-title').textContent = `${label}の名前`;
+  $('theme-name').value = item.title;
+  $('theme-name-error').textContent = '';
+  $('theme-name-dialog').showModal();
+  $('theme-name').focus();
+}
+
+$('theme-name-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const title = $('theme-name').value.trim();
+  if (!renamingThemeItem || !title || title.length > 60) {
+    $('theme-name-error').textContent = '名前は1〜60文字で入力してください。';
+    return;
+  }
+  renamingThemeItem.title = title;
   persist();
+  $('theme-name-dialog').close();
+  renamingThemeItem = null;
   renderGrowth();
   renderTasks();
   renderTaskChoice();
-}
+});
+$('theme-name-cancel').addEventListener('click', () => $('theme-name-dialog').close());
+$('theme-name-dialog').addEventListener('close', () => { renamingThemeItem = null; });
 
 function removeGroup(group, child = null) {
   const label = child?.title || group.title;
@@ -462,6 +482,32 @@ function removeGroup(group, child = null) {
 function durationText(ms) {
   const minutes = Math.max(0, Math.floor(ms / 60_000));
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function themeTimeText(ms) {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
+function themeScale(ms) {
+  const step = ms <= 3_600_000 ? 900_000 : ms <= 36_000_000 ? 3_600_000 : 36_000_000;
+  return Math.max(step, Math.ceil(ms / step) * step);
+}
+
+function themeBar(title, ms, scale) {
+  const row = document.createElement('div');
+  row.className = 'theme-chart-row';
+  const line = growthLine(title, ms);
+  line.lastElementChild.textContent = themeTimeText(ms);
+  const track = document.createElement('div');
+  track.className = 'theme-bar-track';
+  track.setAttribute('aria-hidden', 'true');
+  const fill = document.createElement('span');
+  fill.className = 'theme-bar-fill';
+  fill.style.width = `${ms / scale * 100}%`;
+  track.append(fill);
+  row.append(line, track);
+  return row;
 }
 
 function recordTimeLabel(timestamp, bounds) {
@@ -492,13 +538,13 @@ function dateInputValue(timestamp) {
   return new Date(timestamp - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
 }
 
-function periodLabel(bounds) {
+function periodLabel(bounds, kind = periodKind) {
   const start = new Date(bounds.start);
   const end = new Date(bounds.end);
   end.setDate(end.getDate() - 1);
-  if (periodKind === 'year') return `${start.getFullYear()}年`;
-  if (periodKind === 'month') return `${start.getFullYear()}年${start.getMonth() + 1}月`;
-  if (periodKind === 'week') return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
+  if (kind === 'year') return `${start.getFullYear()}年`;
+  if (kind === 'month') return `${start.getFullYear()}年${start.getMonth() + 1}月`;
+  if (kind === 'week') return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
   return start.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' });
 }
 
@@ -569,38 +615,99 @@ function renderGrowth() {
     .reduce((sum, session) => sum + session.workMs, 0);
   $('day-untimed').hidden = periodKind !== 'day' || untimedMs === 0;
   $('day-untimed').textContent = `開始時刻なし ${durationText(untimedMs)}`;
-  const periodSummary = summarize(groups, periodSessions);
-  const breakdown = $('period-group-list');
-  breakdown.replaceChildren();
-  const unclassifiedMs = periodSummary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
-  for (const group of periodSummary.groups.filter((item) => item.totalMs > 0)) {
-    const section = document.createElement('article');
-    section.className = 'growth-group';
-    section.append(growthLine(group.title, group.totalMs, 'h4'));
-    const children = group.children.filter((item) => item.totalMs > 0);
-    if (children.length) {
-      const list = document.createElement('ul');
-      list.className = 'growth-children';
-      for (const child of children) list.append(growthLine(child.title, child.totalMs, 'li'));
-      if (group.directMs > 0) list.append(growthLine('サブテーマなし', group.directMs, 'li'));
-      section.append(list);
-    }
-    breakdown.append(section);
-  }
-  if (unclassifiedMs > 0) {
-    const row = growthLine('未設定', unclassifiedMs);
-    row.className += ' growth-group';
-    breakdown.append(row);
-  }
-  if (!breakdown.children.length) {
-    const empty = document.createElement('p');
-    empty.textContent = 'この期間の記録はありません。';
-    breakdown.append(empty);
-  }
   $('day-records').hidden = periodKind !== 'day';
   if (periodKind === 'day') renderDayRecords(bounds);
+  renderThemes();
+}
 
-  const summary = summarize(groups, sessions);
+function renderSubthemeChart(group) {
+  const section = document.createElement('section');
+  section.className = 'subtheme-section';
+  const heading = document.createElement('h3');
+  heading.textContent = 'サブテーマ';
+  section.append(heading);
+  const referenceMs = Math.max(0, ...group.children.map((child) => child.totalMs));
+  const scale = themeScale(referenceMs);
+  if (referenceMs > 0) {
+    const reference = document.createElement('p');
+    reference.className = 'subtheme-reference-label subtle';
+    reference.textContent = `目安 ${themeTimeText(referenceMs)}`;
+    section.append(reference);
+  }
+  const table = document.createElement('table');
+  table.className = 'subtheme-table';
+  table.setAttribute('aria-label', `${group.title}のサブテーマ別作業時間`);
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const nameHead = document.createElement('th');
+  nameHead.setAttribute('scope', 'col');
+  nameHead.setAttribute('aria-label', 'サブテーマ');
+  const scaleHead = document.createElement('th');
+  scaleHead.setAttribute('scope', 'col');
+  const axis = document.createElement('div');
+  axis.className = 'theme-scale';
+  const zero = document.createElement('span');
+  zero.textContent = '0h 00m';
+  const maximum = document.createElement('span');
+  maximum.textContent = themeTimeText(scale);
+  axis.append(zero, maximum);
+  scaleHead.append(axis);
+  const valueHead = document.createElement('th');
+  valueHead.setAttribute('scope', 'col');
+  valueHead.setAttribute('aria-label', '作業時間');
+  headRow.append(nameHead, scaleHead, valueHead);
+  head.append(headRow);
+  const body = document.createElement('tbody');
+  for (const child of group.children) {
+    const row = document.createElement('tr');
+    const name = document.createElement('th');
+    name.setAttribute('scope', 'row');
+    name.textContent = child.title;
+    const cell = document.createElement('td');
+    cell.className = 'theme-track-cell';
+    cell.setAttribute('aria-hidden', 'true');
+    const track = document.createElement('div');
+    track.className = 'theme-bar-track';
+    const fill = document.createElement('span');
+    fill.className = 'theme-bar-fill';
+    fill.style.width = `${child.totalMs / scale * 100}%`;
+    track.append(fill);
+    cell.append(track);
+    if (referenceMs > 0) {
+      const marker = document.createElement('span');
+      marker.className = 'subtheme-reference';
+      marker.style.left = `${referenceMs / scale * 100}%`;
+      cell.append(marker);
+    }
+    const amount = document.createElement('td');
+    amount.className = 'theme-amount';
+    amount.textContent = themeTimeText(child.totalMs);
+    row.append(name, cell, amount);
+    body.append(row);
+  }
+  table.append(head, body);
+  section.append(table);
+  return section;
+}
+
+function renderThemes() {
+  const all = themePeriodKind === 'all';
+  const bounds = all ? null : periodBounds(themePeriodKind, themePeriodAnchor, dayStartMinutes);
+  const selected = all ? sessions : sessions.map((session) => ({ ...session,
+    workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
+  const summary = summarize(groups, selected);
+  $('theme-period-label').textContent = all ? '全期間' : periodLabel(bounds, themePeriodKind);
+  for (const kind of ['day', 'week', 'month', 'year', 'all']) {
+    $('theme-period-' + kind).setAttribute('aria-pressed', String(kind === themePeriodKind));
+  }
+  $('theme-period-prev').disabled = all;
+  $('theme-period-next').disabled = all;
+  $('theme-period-prev').hidden = all;
+  $('theme-period-next').hidden = all;
+  const unsetMs = summary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
+  const scale = themeScale(Math.max(unsetMs, ...summary.groups.map((group) => group.totalMs), 0));
+  $('theme-scale').hidden = !groups.length && unsetMs === 0;
+  $('theme-scale-max').textContent = themeTimeText(scale);
   const groupList = $('group-list');
   groupList.replaceChildren();
   if (!groups.length) {
@@ -610,14 +717,35 @@ function renderGrowth() {
   }
   for (const group of summary.groups) {
     const original = groups.find((item) => item.id === group.id);
-    const card = document.createElement('article');
-    card.className = 'group-card';
-    const heading = document.createElement('h3');
-    heading.textContent = `${group.title}　合計 ${durationText(group.totalMs)}`;
+    const card = document.createElement('details');
+    card.className = 'group-card theme-card';
+    card.setAttribute('data-theme-id', group.id);
+    card.open = openThemeIds.has(group.id);
+    card.addEventListener('toggle', () => {
+      if (card.isConnected === false) return;
+      if (card.open) openThemeIds.add(group.id);
+      else openThemeIds.delete(group.id);
+    });
+    const title = document.createElement('summary');
+    title.className = 'theme-summary';
+    title.append(themeBar(group.title, group.totalMs, scale));
+    const chevron = document.createElement('span');
+    chevron.className = 'theme-chevron';
+    chevron.textContent = '›';
+    chevron.setAttribute('aria-hidden', 'true');
+    title.append(chevron);
+    const detail = document.createElement('div');
+    detail.className = 'theme-detail-content';
+    if (group.children.length) detail.append(renderSubthemeChart(group));
     const direct = document.createElement('p');
     direct.className = 'subtle';
-    direct.textContent = `サブテーマなし ${durationText(group.directMs)}`;
-    card.append(heading, direct,
+    direct.textContent = `サブテーマなし ${themeTimeText(group.directMs)}`;
+    if (group.directMs > 0) detail.append(direct);
+    const menu = document.createElement('details');
+    menu.className = 'theme-edit-menu';
+    const menuTitle = document.createElement('summary');
+    menuTitle.textContent = '編集';
+    menu.append(menuTitle,
       rowButton('名前変更', `${group.title}の名前を変更`, () => renameItem(original, 'テーマ')),
       rowButton('削除', `${group.title}を削除`, () => removeGroup(original)));
     const children = document.createElement('ul');
@@ -625,13 +753,13 @@ function renderGrowth() {
       const item = document.createElement('li');
       const originalChild = original.children.find((entry) => entry.id === child.id);
       const label = document.createElement('span');
-      label.textContent = `${child.title} ${durationText(child.totalMs)}`;
+      label.textContent = child.title;
       item.append(label,
         rowButton('名前変更', `${child.title}の名前を変更`, () => renameItem(originalChild, 'サブテーマ')),
         rowButton('削除', `${child.title}を削除`, () => removeGroup(original, originalChild)));
       children.append(item);
     }
-    card.append(children);
+    menu.append(children);
     const form = document.createElement('form');
     form.className = 'inline-form';
     const input = document.createElement('input');
@@ -650,12 +778,15 @@ function renderGrowth() {
       if (!title) return;
       original.children.push({ id: newId(), title });
       persist();
+      openThemeIds.add(group.id);
       renderGrowth();
     });
-    card.append(form);
+    detail.append(form, menu);
+    card.append(title, detail);
     groupList.append(card);
   }
-
+  $('theme-unset').replaceChildren();
+  if (unsetMs > 0) $('theme-unset').append(themeBar('未設定', unsetMs, scale));
 }
 
 function renderDayRecords(bounds) {
@@ -907,6 +1038,9 @@ $('day-start').addEventListener('change', () => {
   const selectedDay = new Date(periodBounds('day', periodAnchor, dayStartMinutes).start);
   selectedDay.setHours(hours, minutes, 0, 0);
   periodAnchor = selectedDay.getTime();
+  const selectedThemeDay = new Date(periodBounds('day', themePeriodAnchor, dayStartMinutes).start);
+  selectedThemeDay.setHours(hours, minutes, 0, 0);
+  themePeriodAnchor = selectedThemeDay.getTime();
   dayStartMinutes = hours * 60 + minutes;
   $('day-start-error').textContent = persist() ? '' : '1日の区切りを保存できませんでした。';
   renderGrowth();
@@ -1018,7 +1152,7 @@ for (const id of ['sound-volume', 'sound-pitch']) {
 }
 $('preview-work').addEventListener('click', () => previewSound('work'));
 $('preview-rest').addEventListener('click', () => previewSound('rest'));
-for (const view of ['timer', 'tasks', 'growth']) {
+for (const view of ['timer', 'tasks', 'growth', 'themes']) {
   $(`nav-${view}`).addEventListener('click', () => switchView(view));
 }
 $('choose-task').addEventListener('click', () => {
@@ -1075,6 +1209,7 @@ $('group-form').addEventListener('submit', (event) => {
   if (!title) return;
   groups.push({ id: newId(), title, children: [] });
   $('group-form').reset();
+  $('theme-add').open = false;
   persist();
   renderGrowth();
   $('growth-status').textContent = 'テーマを追加しました。';
@@ -1087,6 +1222,23 @@ for (const kind of ['day', 'week', 'month', 'year']) {
 }
 $('period-prev').addEventListener('click', () => movePeriod(-1));
 $('period-next').addEventListener('click', () => movePeriod(1));
+for (const kind of ['day', 'week', 'month', 'year', 'all']) {
+  $('theme-period-' + kind).addEventListener('click', () => {
+    themePeriodKind = kind;
+    renderThemes();
+  });
+}
+for (const [id, direction] of [['theme-period-prev', -1], ['theme-period-next', 1]]) {
+  $(id).addEventListener('click', () => {
+    if (themePeriodKind === 'all') return;
+    const next = new Date(periodBounds(themePeriodKind, themePeriodAnchor, dayStartMinutes).start);
+    if (themePeriodKind === 'year') next.setFullYear(next.getFullYear() + direction);
+    else if (themePeriodKind === 'month') next.setMonth(next.getMonth() + direction);
+    else next.setDate(next.getDate() + direction * (themePeriodKind === 'week' ? 7 : 1));
+    themePeriodAnchor = next.getTime();
+    renderThemes();
+  });
+}
 $('unclassified-filter').addEventListener('change', renderGrowth);
 $('record-group').addEventListener('change', () => renderRecordChildren());
 $('record-task').addEventListener('change', () => {
@@ -1211,6 +1363,7 @@ $('import-file').addEventListener('change', async () => {
     ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
     settingsDraftActive = false;
     taskUndo = null;
+    openThemeIds.clear();
     $('task-undo').hidden = true;
     $('status').textContent = '';
     persist();
