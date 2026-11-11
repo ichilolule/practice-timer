@@ -97,7 +97,10 @@
         <strong id="period-label"></strong>
         <button id="period-next" type="button" aria-label="次の期間">→</button>
       </div>
-      <p id="growth-total"></p>
+      <div class="growth-summary">
+        <p class="growth-period-total"><span class="sr-only">選択期間の作業時間（時間:分）</span><span id="growth-total"></span></p>
+        <p id="growth-all-total" class="subtle"></p>
+      </div>
       <div id="period-chart" class="period-chart"></div>
       <h3>育成項目の時間</h3>
       <div id="period-group-list"></div>
@@ -110,7 +113,6 @@
       </section>
       <details id="growth-manage">
         <summary>育成項目を管理</summary>
-        <p class="subtle">小分類の時間は、大分類の合計にも含みます。</p>
         <form id="group-form" class="inline-form">
           <input id="group-title" type="text" maxlength="60" placeholder="例：人体" aria-label="育成項目の名前" required>
           <button type="submit">＋育成項目</button>

@@ -645,6 +645,68 @@ test('既存タイマーの累計は未分類記録として一度だけ引き�
   assert.equal(second.elements.get('record-list').children.length, 1);
 });
 
+test('積み上げは時間と分で表示し、親子の内訳を分けて秒の精度を保持する', async () => {
+  const start = new Date(1_000_000);
+  start.setHours(10, 0, 0, 0);
+  const sessions = [
+    { id: 'hand-record', startedAt: +start, endedAt: +start + 1_559_000, workMs: 1_559_000,
+      taskTitle: '手を描く', targetId: 'hand' },
+    { id: 'direct-record', startedAt: +start + 1_559_000, endedAt: +start + 3_601_000,
+      workMs: 2_042_000, targetId: 'body' },
+    { id: 'short-record', startedAt: +start + 3_601_000, endedAt: +start + 3_646_000,
+      workMs: 45_000, targetId: null },
+    { id: 'other-day', startedAt: null, endedAt: +start + 86_400_000,
+      workMs: 451_800_000, targetId: null },
+  ];
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], tasks: [], groups: [{ id: 'body', title: '人体', children: [{ id: 'hand', title: '手' }] }],
+    sessions, totalWorkMs: 455_446_000, run: null,
+  });
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]));
+  await elements.get('nav-growth').trigger('click');
+  assert.equal(elements.get('growth-total').textContent, '01:00');
+  assert.equal(elements.get('growth-all-total').textContent, '全期間 126:30');
+  const group = elements.get('period-group-list').children[0];
+  assert.deepEqual(group.children[0].children.map((item) => item.textContent), ['人体', '01:00']);
+  assert.deepEqual(group.children[1].children.map((row) => row.children.map((item) => item.textContent)),
+    [['手', '00:25'], ['内訳なし', '00:34']]);
+  const records = elements.get('record-list').children;
+  assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '00:25']);
+  assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
+  assert.equal(records[0].children[1].children[1].textContent, '人体 → 手');
+  assert.equal(records[2].children[0].children[1].textContent, '00:00');
+  await elements.get('period-next').trigger('click');
+  assert.equal(elements.get('growth-total').textContent, '125:30');
+  const legacy = elements.get('record-list').children[0];
+  assert.equal(legacy.children[1].children[0].textContent, '開始時刻なし ～ 10:00');
+  assert.equal(storage.get('practice-timer-v1'), original);
+});
+
+test('日付をまたぐ記録は選択日以外の日付と当日分の時間を表示する', async () => {
+  const start = new Date(1_000_000);
+  start.setHours(23, 30, 0, 0);
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], tasks: [], groups: [], totalWorkMs: 5_400_000, run: null,
+    sessions: [{ id: 'overnight', startedAt: +start, endedAt: +start + 5_400_000,
+      workMs: 5_400_000, taskTitle: '夜の練習', targetId: null }],
+  });
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]));
+  await elements.get('nav-growth').trigger('click');
+  let row = elements.get('record-list').children[0];
+  assert.equal(row.children[0].children[1].textContent, '00:30');
+  assert.equal(row.children[0].children[1].children[0].textContent, 'この日');
+  assert.equal(row.children[1].children[0].textContent, '23:30 ～ 1/2 01:00');
+  await elements.get('period-next').trigger('click');
+  row = elements.get('record-list').children[0];
+  assert.equal(row.children[0].children[1].textContent, '01:00');
+  assert.equal(row.children[1].children[0].textContent, '1/1 23:30 ～ 01:00');
+  await row.children.at(-1).trigger('click');
+  assert.equal(elements.get('record-dialog').open, true);
+  assert.equal(new Date(elements.get('record-start').value).getTime(), +start);
+  assert.equal(new Date(elements.get('record-end').value).getTime(), +start + 5_400_000);
+  assert.equal(storage.get('practice-timer-v1'), original);
+});
+
 test('繰り返し計測の一件削除と起動分削除で累計を再計算する', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 },

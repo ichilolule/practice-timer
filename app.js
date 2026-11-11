@@ -457,10 +457,32 @@ function removeGroup(group, child = null) {
   renderTaskChoice();
 }
 
-function dateLabel(timestamp) {
-  return new Date(timestamp).toLocaleString('ja-JP', {
-    year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+function durationText(ms) {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function recordTimeLabel(timestamp, bounds) {
+  const date = new Date(timestamp);
+  const time = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (timestamp >= bounds.start && timestamp < bounds.end) return time;
+  const day = date.toLocaleDateString('ja-JP', {
+    ...(date.getFullYear() !== new Date(bounds.start).getFullYear() ? { year: 'numeric' } : {}),
+    month: 'numeric', day: 'numeric',
   });
+  return `${day} ${time}`;
+}
+
+function growthLine(title, ms, tag = 'div') {
+  const row = document.createElement(tag);
+  row.className = 'growth-line';
+  const name = document.createElement('span');
+  name.textContent = title;
+  const amount = document.createElement('span');
+  amount.className = 'growth-duration';
+  amount.textContent = durationText(ms);
+  row.append(name, amount);
+  return row;
 }
 
 function dateInputValue(timestamp) {
@@ -502,7 +524,8 @@ function renderGrowth() {
   for (const kind of ['day', 'week', 'month', 'year']) {
     $('period-' + kind).setAttribute('aria-pressed', String(kind === periodKind));
   }
-  $('growth-total').textContent = `この期間 ${timeText(periodMs)}｜全期間 ${timeText(run?.totalWorkMs ?? totalWorkMs)}`;
+  $('growth-total').textContent = durationText(periodMs);
+  $('growth-all-total').textContent = `全期間 ${durationText(run?.totalWorkMs ?? totalWorkMs)}`;
   const chart = $('period-chart');
   chart.replaceChildren();
   const buckets = periodBuckets(periodKind, periodAnchor, sessions);
@@ -519,8 +542,8 @@ function renderGrowth() {
     const label = document.createElement('small');
     label.textContent = periodKind === 'year' ? `${date.getMonth() + 1}月`
       : periodKind === 'week' ? `${date.getMonth() + 1}/${date.getDate()}` : String(date.getDate());
-    item.setAttribute('aria-label', `${label.textContent} ${timeText(bucket.workMs)}`);
-    item.title = `${label.textContent} ${timeText(bucket.workMs)}`;
+    item.setAttribute('aria-label', `${label.textContent} ${durationText(bucket.workMs)}`);
+    item.title = `${label.textContent} ${durationText(bucket.workMs)}`;
     item.addEventListener('click', () => {
       date.setHours(12, 0, 0, 0);
       periodAnchor = date.getTime();
@@ -535,15 +558,22 @@ function renderGrowth() {
   breakdown.replaceChildren();
   const unclassifiedMs = periodSummary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
   for (const group of periodSummary.groups.filter((item) => item.totalMs > 0)) {
-    const row = document.createElement('p');
-    const children = group.children.filter((item) => item.totalMs > 0)
-      .map((item) => `${item.title} ${timeText(item.totalMs)}`).join('、');
-    row.textContent = `${group.title} ${timeText(group.totalMs)}${children ? `（${children}）` : ''}`;
-    breakdown.append(row);
+    const section = document.createElement('article');
+    section.className = 'growth-group';
+    section.append(growthLine(group.title, group.totalMs, 'h4'));
+    const children = group.children.filter((item) => item.totalMs > 0);
+    if (children.length) {
+      const list = document.createElement('ul');
+      list.className = 'growth-children';
+      for (const child of children) list.append(growthLine(child.title, child.totalMs, 'li'));
+      if (group.directMs > 0) list.append(growthLine('内訳なし', group.directMs, 'li'));
+      section.append(list);
+    }
+    breakdown.append(section);
   }
   if (unclassifiedMs > 0) {
-    const row = document.createElement('p');
-    row.textContent = `加算先なし ${timeText(unclassifiedMs)}`;
+    const row = growthLine('加算先なし', unclassifiedMs);
+    row.className += ' growth-group';
     breakdown.append(row);
   }
   if (!breakdown.children.length) {
@@ -567,10 +597,10 @@ function renderGrowth() {
     const card = document.createElement('article');
     card.className = 'group-card';
     const heading = document.createElement('h3');
-    heading.textContent = `${group.title}　合計 ${timeText(group.totalMs)}`;
+    heading.textContent = `${group.title}　合計 ${durationText(group.totalMs)}`;
     const direct = document.createElement('p');
     direct.className = 'subtle';
-    direct.textContent = `内訳なし ${timeText(group.directMs)}`;
+    direct.textContent = `内訳なし ${durationText(group.directMs)}`;
     card.append(heading, direct,
       rowButton('名前変更', `${group.title}の名前を変更`, () => renameItem(original, '育成項目')),
       rowButton('削除', `${group.title}を削除`, () => removeGroup(original)));
@@ -579,7 +609,7 @@ function renderGrowth() {
       const item = document.createElement('li');
       const originalChild = original.children.find((entry) => entry.id === child.id);
       const label = document.createElement('span');
-      label.textContent = `${child.title} ${timeText(child.totalMs)}`;
+      label.textContent = `${child.title} ${durationText(child.totalMs)}`;
       item.append(label,
         rowButton('名前変更', `${child.title}の名前を変更`, () => renameItem(originalChild, '内訳')),
         rowButton('削除', `${child.title}を削除`, () => removeGroup(original, originalChild)));
@@ -623,11 +653,23 @@ function renderDayRecords(bounds) {
   for (const session of records) {
     const row = document.createElement('article');
     row.className = 'record-row';
-    const heading = document.createElement('strong');
     const workMs = workInRange(session, bounds.start, bounds.end);
-    heading.textContent = `${session.startedAt == null ? '開始時刻なし' : dateLabel(session.startedAt)} ～ ${dateLabel(session.endedAt)}｜${timeText(workMs)}${workMs < session.workMs ? '（この日）' : ''}`;
+    const heading = growthLine(session.taskTitle || 'タスク未選択', workMs);
+    heading.className += ' record-main';
+    if (workMs < session.workMs) {
+      const marker = document.createElement('small');
+      marker.className = 'record-day-marker';
+      marker.textContent = 'この日';
+      heading.lastElementChild.append(marker);
+    }
     const detail = document.createElement('p');
-    detail.textContent = `${session.taskTitle || 'タスク未選択'}｜${targetLabel(groups, session.targetId) || '加算先なし'}`;
+    detail.className = 'record-meta subtle';
+    const range = document.createElement('span');
+    range.className = 'record-range';
+    range.textContent = `${session.startedAt == null ? '開始時刻なし' : recordTimeLabel(session.startedAt, bounds)} ～ ${recordTimeLabel(session.endedAt, bounds)}`;
+    const target = document.createElement('span');
+    target.textContent = targetLabel(groups, session.targetId) || '加算先なし';
+    detail.append(range, target);
     row.append(heading, detail,
       rowButton('修正・削除', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session)));
     list.append(row);
@@ -1078,7 +1120,7 @@ $('end').addEventListener('click', () => {
   }
   run = null;
   selectedTaskId = null;
-  $('status').textContent = `記録 ${timeText(gainedMs)}`;
+  $('status').textContent = `記録 ${durationText(gainedMs)}`;
   persist();
   renderTimer();
   renderTaskChoice();
