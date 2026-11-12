@@ -693,20 +693,23 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   assert.equal(restored.elements.get('active-task-hint').textContent, saved.tasks[0].firstStep);
 });
 
-test('タスク未選択で開始した場合は一覧を残し、選んだ後に隠す', async () => {
+test('未選択で開始しても中央に表示し、Tasksから後で割り当てられる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 1 }, { type: 'rest', minutes: 1 }], totalWorkMs: 0,
   })]]);
-  const app = mount(storage);
-  const { elements } = app;
+  const { elements } = mount(storage);
   await elements.get('main-action').trigger('click');
-  assert.equal(elements.get('active-task-panel').hidden, false);
-  elements.get('timer-quick-task-title').value = '読む';
-  await elements.get('timer-quick-task-form').trigger('submit');
+  assert.equal(elements.get('active-task-panel').hidden, true);
+  assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'true');
+  await elements.get('nav-tasks').trigger('click');
+  elements.get('quick-task-title').value = '読む';
+  await elements.get('quick-task-form').trigger('submit');
+  await buttonNamed(elements.get('task-list').children[0], 'Use this task').trigger('click');
   assert.equal(elements.get('active-task-panel').hidden, true);
   assert.equal(elements.get('active-task-name').textContent, '読む');
   const restored = mount(storage);
   assert.equal(restored.elements.get('active-task-panel').hidden, true);
+  assert.equal(restored.elements.get('timer-layout').getAttribute('data-running'), 'true');
   assert.equal(restored.elements.get('active-task-name').textContent, '読む');
 });
 
@@ -820,7 +823,7 @@ test('先頭へ追加し、未選択タスクは選択、選択済みタスク�
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks[0].title, '詳細付きの新規');
 });
 
-test('計測中の空き欄でタイトル・メモ・テーマを自動保存し、空のタイトルを保存しない', async () => {
+test('計測中は中央表示し、上部タイトルのポップアップから編集して記録に反映できる', async () => {
   const app = mount(new Map([['practice-timer-v1', JSON.stringify({
     format: 'practice-timer-beta', version: 1,
     steps: [{ type: 'work', minutes: 1 }, { type: 'rest', minutes: 1 }],
@@ -829,31 +832,37 @@ test('計測中の空き欄でタイトル・メモ・テーマを自動保存�
     sessions: [], totalWorkMs: 0, run: null, selectedTaskId: 'task',
   })]]));
   const { elements } = app;
+  assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'false');
   await elements.get('main-action').trigger('click');
-  assert.equal(elements.get('timer-task-details').hidden, false);
   assert.equal(elements.get('active-task-panel').hidden, true);
-  assert.equal(elements.get('timer-task-title').value, '練習');
-  elements.get('timer-task-title').value = '発音を練習';
-  await elements.get('timer-task-title').trigger('input');
+  assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'true');
+  assert.equal(elements.has('timer-task-details'), false);
+  await elements.get('main-action').trigger('click');
+  assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'true');
+  await elements.get('active-task-name').trigger('click');
+  assert.equal(elements.get('task-dialog').open, true);
+  assert.equal(elements.get('task-title').value, '練習');
+  elements.get('task-title').value = '  ';
+  await elements.get('task-form').trigger('submit');
+  assert.equal(JSON.parse(app.storage.get('practice-timer-v1')).tasks[0].title, '練習');
+  elements.get('task-title').value = '発音を練習';
+  elements.get('task-first-step').value = '今の気づき\n次に試すこと';
+  elements.get('task-group').value = 'g';
+  await elements.get('task-group').trigger('change');
+  assert.equal(elements.get('task-child').disabled, false);
+  elements.get('task-child').value = 'c';
+  await elements.get('task-form').trigger('submit');
+  assert.equal(elements.get('task-dialog').open, false);
   assert.equal(elements.get('active-task-name').textContent, '発音を練習');
-  elements.get('timer-task-title').value = '  ';
-  await elements.get('timer-task-title').trigger('input');
-  await elements.get('timer-task-title').trigger('blur');
-  assert.equal(elements.get('timer-task-title').value, '発音を練習');
-  elements.get('timer-task-memo').value = '今の気づき\n次に試すこと';
-  await elements.get('timer-task-memo').trigger('input');
-  elements.get('timer-task-group').value = 'g';
-  await elements.get('timer-task-group').trigger('change');
-  assert.equal(elements.get('timer-task-child').disabled, false);
-  elements.get('timer-task-child').value = 'c';
-  await elements.get('timer-task-child').trigger('change');
   const restored = mount(app.storage);
-  assert.equal(restored.elements.get('timer-task-title').value, '発音を練習');
-  assert.equal(restored.elements.get('timer-task-memo').value, '今の気づき\n次に試すこと');
-  assert.equal(restored.elements.get('timer-task-child').value, 'c');
+  assert.equal(restored.elements.get('active-task-name').textContent, '発音を練習');
+  assert.equal(restored.elements.get('active-task-hint').textContent, '今の気づき\n次に試すこと');
+  await elements.get('main-action').trigger('click');
   app.advance(3000);
   await elements.get('end').trigger('click');
-  assert.equal(elements.get('timer-task-details').hidden, true);
+  assert.equal(elements.get('active-task-panel').hidden, false);
+  assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'false');
+  assert.equal(elements.get('status').textContent, '');
   const saved = JSON.parse(app.storage.get('practice-timer-v1'));
   assert.equal(saved.tasks[0].firstStep, '今の気づき\n次に試すこと');
   assert.equal(saved.sessions[0].targetId, 'c');

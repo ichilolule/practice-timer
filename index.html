@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Practice timer</title>
-  <link rel="stylesheet" href="styles.css?rev=853f027eee">
+  <link rel="stylesheet" href="styles.css?rev=fdf207cf5c">
   <script defer src="timer-core.js"></script>
   <script defer src="practice-data.js?rev=62c8cf32cb"></script>
   <script defer src="backup-files.js?rev=ce6703fa73"></script>
-  <script defer src="app.js?rev=7533475f6f"></script>
+  <script defer src="app.js?rev=60b579e4e6"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -32,15 +32,15 @@
   </svg>
   <main class="app">
     <nav id="primary-nav" aria-label="Main navigation">
-      <button id="nav-timer" type="button" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg><span>Timer</span></button>
-      <button id="nav-tasks" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"/></svg><span>Tasks</span></button>
-      <button id="nav-growth" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>Review</span></button>
-      <button id="nav-themes" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-themes"/></svg><span>Themes</span></button>
-      <button id="settings-toggle" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg><span>Settings</span></button>
+      <button id="nav-timer" type="button" aria-label="Timer" title="Timer" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg><span>Timer</span></button>
+      <button id="nav-tasks" type="button" aria-label="Tasks" title="Tasks"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"/></svg><span>Tasks</span></button>
+      <button id="nav-growth" type="button" aria-label="Review" title="Review"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>Review</span></button>
+      <button id="nav-themes" type="button" aria-label="Themes" title="Themes"><svg class="icon" aria-hidden="true"><use href="#icon-themes"/></svg><span>Themes</span></button>
+      <button id="settings-toggle" type="button" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg><span>Settings</span></button>
     </nav>
 
     <section id="timer-view" aria-label="Timer">
-      <div class="timer-layout">
+      <div id="timer-layout" class="timer-layout">
         <div class="timer-face">
           <div class="active-task-summary">
             <h2 class="sr-only">Current task and notes</h2>
@@ -73,20 +73,13 @@
           <p id="status" role="status" aria-live="polite"></p>
         </div>
         <div id="active-task-panel">
-          <h2 class="practice-tasks-heading">Practice tasks</h2>
           <ul id="task-picker-list" class="item-list" aria-label="Choose a task for this session"></ul>
           <form id="timer-quick-task-form" class="inline-form">
             <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="Add task" aria-label="New practice task" required>
             <button type="submit" aria-label="Add task">＋</button>
           </form>
         </div>
-        <div id="timer-task-details" hidden>
-          <h2 class="sr-only">Current task details</h2>
-          <label>Title <input id="timer-task-title" type="text" maxlength="100" required></label>
-          <label class="timer-memo-field">Notes <textarea id="timer-task-memo" maxlength="500"></textarea></label>
-          <label>Theme <select id="timer-task-group"></select></label>
-          <label>Subtheme <select id="timer-task-child"></select></label>
-        </div>
+
       </div>
     </section>
 

@@ -140,7 +140,8 @@ function renderTaskChoice(rebuildPicker = true) {
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;
-  const hideList = Boolean(run && selectedTaskId);
+  const hideList = Boolean(run);
+  $('timer-layout').setAttribute('data-running', String(hideList));
   if (!rebuildPicker && !$('active-task-panel').hidden) taskPickerScrollTop = $('task-picker-list').scrollTop;
   if (rebuildPicker) renderTaskPicker();
   else for (const row of $('task-picker-list').children) {
@@ -154,31 +155,7 @@ function renderTaskChoice(rebuildPicker = true) {
     }
   }
   $('active-task-panel').hidden = hideList;
-  $('timer-task-details').hidden = !hideList;
-  if (hideList) renderTimerTaskDetails(task);
   if (!hideList) $('task-picker-list').scrollTop = taskPickerScrollTop;
-}
-
-function renderTimerTaskChildren(selected = '') {
-  const group = groups.find((item) => item.id === $('timer-task-group').value);
-  const select = $('timer-task-child');
-  select.replaceChildren();
-  appendOption(select, '', group ? 'No subtheme' : 'Choose a theme');
-  for (const child of group?.children || []) appendOption(select, child.id, child.title);
-  select.value = group?.children.some((child) => child.id === selected) ? selected : '';
-  select.disabled = !group?.children.length;
-}
-
-function renderTimerTaskDetails(task) {
-  $('timer-task-title').value = task.title;
-  $('timer-task-memo').value = task.firstStep;
-  const { groupId, childId } = taskTargetParts(task.targetId);
-  const select = $('timer-task-group');
-  select.replaceChildren();
-  appendOption(select, '', 'Unassigned');
-  for (const group of groups) appendOption(select, group.id, group.title);
-  select.value = groupId;
-  renderTimerTaskChildren(childId);
 }
 
 function chooseTask(task, focusTimer = true) {
@@ -1415,44 +1392,6 @@ $('active-task-name').addEventListener('click', () => {
   const task = tasks.find((item) => item.id === selectedTaskId);
   if (task) openTaskEditor(task);
 });
-$('timer-task-title').addEventListener('input', () => {
-  const task = tasks.find((item) => item.id === selectedTaskId);
-  const title = $('timer-task-title').value.trim();
-  if (!task || !run || !title) return;
-  task.title = title;
-  persist();
-  $('active-task-name').textContent = title;
-  $('active-task-name').title = title;
-});
-$('timer-task-title').addEventListener('blur', () => {
-  const task = tasks.find((item) => item.id === selectedTaskId);
-  if (task) $('timer-task-title').value = task.title;
-});
-$('timer-task-memo').addEventListener('input', () => {
-  const task = tasks.find((item) => item.id === selectedTaskId);
-  if (!task || !run) return;
-  task.firstStep = $('timer-task-memo').value;
-  persist();
-  $('active-task-hint').textContent = task.firstStep;
-  $('active-task-hint').title = task.firstStep;
-  $('active-task-hint').hidden = !task.firstStep;
-});
-$('timer-task-group').addEventListener('change', () => {
-  const task = tasks.find((item) => item.id === selectedTaskId);
-  const groupId = $('timer-task-group').value;
-  if (!task || !run || (groupId && !groups.some((group) => group.id === groupId))) return;
-  task.targetId = groupId || null;
-  renderTimerTaskChildren();
-  persist();
-});
-$('timer-task-child').addEventListener('change', () => {
-  const task = tasks.find((item) => item.id === selectedTaskId);
-  const group = groups.find((item) => item.id === $('timer-task-group').value);
-  const childId = $('timer-task-child').value;
-  if (!task || !run || !group || (childId && !group.children.some((child) => child.id === childId))) return;
-  task.targetId = childId || group.id;
-  persist();
-});
 $('timer-quick-task-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const input = $('timer-quick-task-title');
@@ -1590,7 +1529,6 @@ $('end').addEventListener('click', () => {
   if (!run) return;
   advanceClock(run, Date.now());
   totalWorkMs = run.totalWorkMs;
-  const gainedMs = run.sessionWorkMs;
   const task = tasks.find((item) => item.id === selectedTaskId);
   const recordGroupId = run.recordGroupId || newId();
   const taskFields = { taskId: task?.id || null, taskTitle: task?.title || null,
@@ -1603,7 +1541,7 @@ $('end').addEventListener('click', () => {
   }
   run = null;
   selectedTaskId = null;
-  $('status').textContent = `Logged ${durationText(gainedMs)}`;
+  $('status').textContent = '';
   persist();
   renderTimer();
   renderTaskChoice();
