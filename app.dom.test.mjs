@@ -51,6 +51,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
   const document = {
     getElementById: (id) => elements.get(id),
     createElement: (tag) => new Element(tag),
+    createElementNS: (_namespace, tag) => new Element(tag),
     body: new Element('body'),
     elementFromPoint: () => hitElement,
   };
@@ -144,6 +145,30 @@ test('自動保存へタスク・設定変更を伝え、計測途中のJSONも�
   app.elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(ended) }];
   await app.elements.get('import-file').trigger('change');
   assert.equal(changes.at(-1).tasks[0].title, 'JSONから復元したタスク');
+});
+
+test('下部の入力欄が折り返しても末尾用の余白を追従させ、非表示時の高さは採用しない', () => {
+  let resize;
+  const measured = new Map();
+  const observed = [];
+  const storage = new Map();
+  const app = mount(storage, undefined, 1_000_000, context => {
+    context.document.documentElement = { style: { setProperty: (key, value) => measured.set(key, value) } };
+    context.window.ResizeObserver = class {
+      constructor(callback) { resize = callback; }
+      observe(element) { observed.push(element); }
+    };
+  });
+  assert.deepEqual(observed, [app.elements.get('quick-task-form'), app.elements.get('primary-nav')]);
+  const entry = (id, height) => ({ target: { id, getBoundingClientRect: () => ({ height }) } });
+  resize([entry('quick-task-form', 69), entry('primary-nav', 69)]);
+  assert.equal(measured.get('--task-entry-height'), '69px');
+  resize([entry('quick-task-form', 113)]);
+  assert.equal(measured.get('--task-entry-height'), '113px');
+  resize([entry('quick-task-form', 0), entry('primary-nav', 90)]);
+  assert.equal(measured.get('--task-entry-height'), '113px');
+  assert.equal(measured.get('--primary-nav-height'), '90px');
+  assert.equal(storage.size, 0);
 });
 
 test('ローカルデータが壊れている間は直接保存を止め、有効なJSONを読み込むと解除する', async () => {
@@ -919,7 +944,11 @@ test('作業時間をh・m表記に統一し、秒の精度と開始・終了時
   const records = elements.get('record-list').children;
   assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '0h 25m']);
   assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
-  assert.equal(records[0].children[1].children[1].textContent, '人体 → 手');
+  assert.equal(records[0].children[1].children.length, 1);
+  const edit = records[0].children[2];
+  assert.equal(edit.textContent, '');
+  assert.equal(edit.getAttribute('aria-label'), '手を描くの記録を修正または削除');
+  assert.equal(edit.children[0].children[0].getAttribute('href'), '#icon-work');
   assert.equal(records[2].children[0].children[1].textContent, '0h 00m');
   await elements.get('period-next').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '125h 30m');

@@ -974,6 +974,7 @@ function renderDayRecords(bounds) {
     const workMs = workInRange(session, bounds.start, bounds.end);
     const heading = growthLine(session.taskTitle || 'タスク未選択', workMs);
     heading.className += ' record-main';
+    heading.children[0].title = session.taskTitle || 'タスク未選択';
     if (workMs < session.workMs) {
       const marker = document.createElement('small');
       marker.className = 'record-day-marker';
@@ -985,11 +986,16 @@ function renderDayRecords(bounds) {
     const range = document.createElement('span');
     range.className = 'record-range';
     range.textContent = `${session.startedAt == null ? '開始時刻なし' : recordTimeLabel(session.startedAt, bounds)} ～ ${recordTimeLabel(session.endedAt, bounds)}`;
-    const target = document.createElement('span');
-    target.textContent = targetLabel(groups, session.targetId) || '未設定';
-    detail.append(range, target);
-    row.append(heading, detail,
-      rowButton('修正・削除', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session)));
+    detail.append(range);
+    const edit = rowButton('', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session));
+    edit.className = 'record-edit';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('class', 'icon');
+    icon.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#icon-work');
+    icon.append(use); edit.append(icon);
+    row.append(heading, detail, edit);
     list.append(row);
   }
   if (!records.length) {
@@ -1592,6 +1598,18 @@ addEventListener('beforeunload', () => {
 });
 
 load();
+// 折り返し・文字サイズ・端末の安全領域に合わせ、末尾のタスクと取り消し通知の重なりを防ぐ。
+if (window.ResizeObserver) {
+  const fixedControls = new window.ResizeObserver(entries => {
+    for (const { target } of entries) {
+      const height = target.getBoundingClientRect().height;
+      if (height > 0) document.documentElement.style.setProperty(
+        target.id === 'quick-task-form' ? '--task-entry-height' : '--primary-nav-height', `${height}px`);
+    }
+  });
+  fixedControls.observe($('quick-task-form'), { box: 'border-box' });
+  fixedControls.observe($('primary-nav'), { box: 'border-box' });
+}
 backupFiles = globalThis.PracticeBackupFiles.mount({
   snapshot: backupObject,
   content: () => JSON.stringify(currentBackup()),
