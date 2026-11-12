@@ -45,7 +45,7 @@ class Element {
   }
 }
 
-function mount(storage = new Map(), AudioContext = class { constructor() { throw new Error('audio unavailable'); } }, initialNow = 1_000_000) {
+function mount(storage = new Map(), AudioContext = class { constructor() { throw new Error('audio unavailable'); } }, initialNow = 1_000_000, configureBackup) {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map((match) => [match[1], new Element()]));
   const document = {
@@ -76,7 +76,8 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     URL: { createObjectURL(blob) { exportedBlob = blob; return 'blob:test'; }, revokeObjectURL() {} },
     Date: FakeDate,
   });
-  for (const file of ['timer-core.js', 'practice-data.js', 'app.js']) {
+  for (const file of ['timer-core.js', 'practice-data.js', 'backup-files.js', 'app.js']) {
+    if (file === 'app.js') configureBackup?.(context);
     vm.runInContext(readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), context);
   }
   return { elements, storage, viewport, hit(element) { hitElement = element; }, advance(ms) { now += ms; },
@@ -108,6 +109,55 @@ function recordAudio() {
   }
   return { AudioContext, notes, gains };
 }
+
+test('自動保存へタスク・設定変更を伝え、計測途中のJSONも既存形式で復元できる', async () => {
+  let options;
+  const changes = [];
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
+  })]]);
+  const app = mount(storage, undefined, 1_000_000, context => {
+    context.PracticeBackupFiles = { mount(value) { options = value; return { changed: next => changes.push(JSON.parse(next)) }; } };
+  });
+  app.elements.get('timer-quick-task-title').value = '人体の練習';
+  await app.elements.get('timer-quick-task-form').trigger('submit');
+  assert.equal(changes.at(-1).tasks[0].title, '人体の練習');
+  app.elements.get('day-start').value = '04:00';
+  await app.elements.get('day-start').trigger('change');
+  assert.equal(changes.at(-1).dayStartMinutes, 240);
+  await app.elements.get('main-action').trigger('click');
+  app.advance(3500);
+  const automatic = JSON.parse(JSON.stringify(options.snapshot()));
+  assert.equal(automatic.run.status, 'paused');
+  assert.equal(automatic.run.sessionWorkMs, 3500);
+  assert.equal(automatic.totalWorkMs, 3500);
+  assert.equal(automatic.run.lastTick, null);
+  assert.equal(app.elements.get('main-action').getAttribute('aria-label'), '一時停止');
+  const restored = mount(new Map([['practice-timer-v1', JSON.stringify(automatic)]]));
+  assert.equal(restored.elements.get('main-action').getAttribute('aria-label'), '再開');
+  await app.elements.get('end').trigger('click');
+  assert.equal(changes.at(-1).run, null);
+  assert.equal(changes.at(-1).sessions[0].workMs, 3500);
+  await app.elements.get('export-data').trigger('click');
+  const ended = JSON.parse(await app.exportedBlob.text());
+  ended.tasks[0].title = 'JSONから復元したタスク';
+  app.elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(ended) }];
+  await app.elements.get('import-file').trigger('change');
+  assert.equal(changes.at(-1).tasks[0].title, 'JSONから復元したタスク');
+});
+
+test('ローカルデータが壊れている間は直接保存を止め、有効なJSONを読み込むと解除する', async () => {
+  let options;
+  const app = mount(new Map([['practice-timer-v1', '{broken']]), undefined, 1_000_000, context => {
+    context.PracticeBackupFiles = { mount(value) { options = value; return { changed() {} }; } };
+  });
+  assert.equal(options.canWrite(), false);
+  const recovered = { format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [], totalWorkMs: 0, run: null };
+  app.elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(recovered) }];
+  await app.elements.get('import-file').trigger('change');
+  assert.equal(options.canWrite(), true);
+  assert.match(app.elements.get('backup-status').textContent, /読み込みました/);
+});
 
 test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で試聴できる', async () => {
   const audio = recordAudio();

@@ -37,6 +37,8 @@ let soundSettings = { ...DEFAULT_SOUND };
 let dayStartMinutes = DEFAULT_DAY_START;
 let previewPlaying = false;
 let lastSaved = 0;
+let backupFiles = null;
+let localDataReadable = true;
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function load() {
@@ -57,11 +59,13 @@ function load() {
         taskId: null, taskTitle: '以前の累計', targetId: null });
     }
   } catch {
+    localDataReadable = false;
     $('status').textContent = '保存データを読めませんでした。設定を確認してください。';
   }
 }
 
 function persist() {
+  backupFiles?.changed(JSON.stringify(currentBackup()));
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: BACKUP_FORMAT, version: 1,
       steps, run, totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
@@ -1167,6 +1171,10 @@ function validateBackup(raw) {
 
 function backupObject() {
   if (run?.status === 'running') handleEvent(advanceClock(run, Date.now()));
+  return currentBackup();
+}
+
+function currentBackup() {
   return { format: BACKUP_FORMAT, version: 1, steps, tasks, groups, sessions,
     totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
     run: run ? { ...run, status: 'paused', lastTick: null } : null,
@@ -1558,6 +1566,7 @@ $('import-file').addEventListener('change', async () => {
     const next = validateBackup(JSON.parse(await file.text()));
     if (!confirm('現在のデータをJSONの内容で置き換えますか？')) return;
     ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
+    localDataReadable = true;
     settingsDraftActive = false;
     clearTaskUndo();
     openThemeIds.clear();
@@ -1583,6 +1592,11 @@ addEventListener('beforeunload', () => {
 });
 
 load();
+backupFiles = globalThis.PracticeBackupFiles.mount({
+  snapshot: backupObject,
+  content: () => JSON.stringify(currentBackup()),
+  canWrite: () => localDataReadable,
+});
 switchView('timer');
 setInterval(() => {
   if (!run || run.status !== 'running') return;

@@ -179,6 +179,12 @@ dialog h2 { margin-top: 0; }
 .record-row input { flex: 1 1 230px; }
 .import-label { display: block; margin: 15px 0; }
 .import-label input { display: block; max-width: 100%; margin-top: 5px; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.backup-actions input { flex: 1 1 240px; min-width: 0; font: inherit; padding: 8px; border: 1px solid #abb1bd; border-radius: 6px; }
+.backup-target { padding: 12px 0; border-bottom: 1px solid #dde1e8; overflow-wrap: anywhere; }
+.backup-target p { margin: 6px 0; }
+.backup-auto { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+#backup-file-message:empty { display: none; }
 #step-list li { padding: 10px 0; border-bottom: 1px solid #dde1e8; }
 .step-row { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
 .step-row label { display: grid; gap: 3px; font-size: .9rem; }

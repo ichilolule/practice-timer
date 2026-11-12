@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <script defer src="timer-core.js"></script>
   <script defer src="practice-data.js"></script>
+  <script defer src="backup-files.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -176,7 +177,16 @@
       <button id="permission" type="button">通知を許可</button>
       <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
       <h2>バックアップ</h2>
-      <button id="export-data" type="button">JSONを保存</button>
+      <div class="backup-actions">
+        <input id="backup-label" type="text" maxlength="40" placeholder="保存先の名前（例：iCloud Drive）" aria-label="追加する保存先の名前">
+        <button id="backup-add" type="button" disabled>保存先を追加</button>
+        <button id="backup-save" type="button" disabled>すべて今すぐ保存</button>
+      </div>
+      <div id="backup-targets"></div>
+      <label class="backup-auto"><input id="backup-auto" type="checkbox" checked> 保存先へ自動保存</label>
+      <p id="backup-auto-status" class="subtle" role="status" aria-live="polite"></p>
+      <p id="backup-file-message" role="status" aria-live="polite"></p>
+      <button id="export-data" type="button">JSONをダウンロード</button>
       <label class="import-label">JSONを読み込む <input id="import-file" type="file" accept=".json,application/json"></label>
       <p class="subtle">読み込みは現在のタスク・時間・テーマ・各設定を置き換えます。計測中は読み込めません。</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
