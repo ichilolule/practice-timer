@@ -963,9 +963,7 @@ function renderThemes() {
 function renderDayRecords(bounds) {
   const list = $('record-list');
   list.replaceChildren();
-  const unclassifiedOnly = $('unclassified-filter').checked;
-  const records = sessions.filter((session) => workInRange(session, bounds.start, bounds.end) > 0 &&
-    (!unclassifiedOnly || !targetLabel(groups, session.targetId)))
+  const records = sessions.filter((session) => workInRange(session, bounds.start, bounds.end) > 0)
     .sort((a, b) => (a.startedAt ?? a.endedAt) - (b.startedAt ?? b.endedAt));
   $('day-record-count').textContent = `(${records.length})`;
   for (const session of records) {
@@ -1000,7 +998,7 @@ function renderDayRecords(bounds) {
   }
   if (!records.length) {
     const empty = document.createElement('p');
-    empty.textContent = unclassifiedOnly ? 'テーマが未設定の記録はありません。' : 'この日の記録はありません。';
+    empty.textContent = 'この日の記録はありません。';
     list.append(empty);
   }
 }
@@ -1450,7 +1448,6 @@ for (const [id, direction] of [['theme-period-prev', -1], ['theme-period-next', 
     renderThemes();
   });
 }
-$('unclassified-filter').addEventListener('change', renderGrowth);
 $('record-group').addEventListener('change', () => renderRecordChildren());
 $('record-task').addEventListener('change', () => {
   const task = tasks.find((item) => item.id === $('record-task').value);

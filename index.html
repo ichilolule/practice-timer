@@ -29,7 +29,7 @@
     <nav id="primary-nav" aria-label="画面切り替え">
       <button id="nav-timer" type="button" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg><span>タイマー</span></button>
       <button id="nav-tasks" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"/></svg><span>タスク</span></button>
-      <button id="nav-growth" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>積み上げ</span></button>
+      <button id="nav-growth" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>振り返り</span></button>
       <button id="nav-themes" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-themes"/></svg><span>テーマ</span></button>
       <button id="settings-toggle" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg><span>設定</span></button>
     </nav>
@@ -87,7 +87,7 @@
       </form>
     </section>
 
-    <section id="growth-view" aria-label="積み上げ" hidden>
+    <section id="growth-view" aria-label="振り返り" hidden>
       <div id="period-tabs" class="period-tabs" role="group" aria-label="集計期間">
         <button id="period-day" type="button">日</button>
         <button id="period-week" type="button">週</button>
@@ -111,7 +111,6 @@
       <section id="day-records">
         <div class="day-record-heading">
           <h3>この日の記録 <span id="day-record-count"></span></h3>
-          <label><input id="unclassified-filter" type="checkbox"> 未設定のみ</label>
         </div>
         <div id="record-list"></div>
       </section>
@@ -152,7 +151,7 @@
         <button id="cancel-settings" type="button">キャンセル</button>
       </div>
       <p id="settings-error" role="alert"></p>
-      <h2>積み上げ <span class="settings-hint">自動保存</span></h2>
+      <h2>振り返り <span class="settings-hint">自動保存</span></h2>
       <div class="day-boundary-setting">
         <label for="day-start">1日の区切り</label>
         <input id="day-start" type="time" step="60" value="05:00" required>
