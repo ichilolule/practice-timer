@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>練習タイマー</title>
+  <title>Practice timer</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="timer-core.js"></script>
   <script defer src="practice-data.js"></script>
@@ -17,233 +17,247 @@
     <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></symbol>
     <symbol id="icon-next" viewBox="0 0 24 24"><path d="m6 5 10 7-10 7Z" fill="currentColor" stroke="none"/><path d="M19 5v14"/></symbol>
     <symbol id="icon-work" viewBox="0 0 24 24"><path d="m4 15 11-11 5 5L9 20l-6 1ZM12 7l5 5M4 15l5 5"/></symbol>
-    <symbol id="icon-rest" viewBox="0 0 24 24"><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5ZM17 10h2a3 3 0 0 1 0 6h-2M7 3v2M12 3v2M3 22h16"/></symbol>
+    <symbol id="icon-rest" viewBox="0 0 24 24"><path d="M3 9h14v4a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6ZM17 10h2a3 3 0 0 1 0 6h-3M11 2c3 3-3 3 0 6M2 21h17"/></symbol>
     <symbol id="icon-timer" viewBox="0 0 24 24"><circle cx="12" cy="14" r="8"/><path d="M12 10v4l3 2M9 2h6M12 2v4M19 6l2 2"/></symbol>
     <symbol id="icon-tasks" viewBox="0 0 24 24"><path d="m3 6 2 2 3-4M11 6h10M3 13h4M11 13h10M3 20h4M11 20h10"/></symbol>
-    <symbol id="icon-growth" viewBox="0 0 24 24"><path d="M4 20V13h4v7M10 20V8h4v12M16 20V3h4v17M2 21h20"/></symbol>
+    <symbol id="icon-growth" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="4" rx=".6"/><rect x="4" y="10" width="16" height="4" rx=".6"/><rect x="4" y="17" width="16" height="4" rx=".6"/></symbol>
     <symbol id="icon-themes" viewBox="0 0 24 24"><path d="m3 3 8 0 10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
     <symbol id="icon-settings" viewBox="0 0 24 24"><path d="m9 3 1-2h4l1 2 2 1 2-.1 2 3-1 2v3l1 2-2 3-2-.1-2 1-1 3h-4l-1-3-2-1-2 .1-2-3 1-2V9L3 7l2-3 2 .1Z"/><circle cx="12" cy="11" r="3"/></symbol>
     <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   </svg>
   <main class="app">
-    <nav id="primary-nav" aria-label="画面切り替え">
-      <button id="nav-timer" type="button" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg><span>タイマー</span></button>
-      <button id="nav-tasks" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"/></svg><span>タスク</span></button>
-      <button id="nav-growth" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>振り返り</span></button>
-      <button id="nav-themes" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-themes"/></svg><span>テーマ</span></button>
-      <button id="settings-toggle" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg><span>設定</span></button>
+    <nav id="primary-nav" aria-label="Main navigation">
+      <button id="nav-timer" type="button" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-timer"/></svg><span>Timer</span></button>
+      <button id="nav-tasks" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"/></svg><span>Tasks</span></button>
+      <button id="nav-growth" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg><span>Review</span></button>
+      <button id="nav-themes" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-themes"/></svg><span>Themes</span></button>
+      <button id="settings-toggle" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg><span>Settings</span></button>
     </nav>
 
-    <section id="timer-view" aria-label="タイマー">
+    <section id="timer-view" aria-label="Timer">
       <div class="timer-layout">
-      <div class="timer-face">
-      <div id="phase-name" class="phase" role="img" aria-label="手順未設定" title="手順未設定">
-        <svg class="icon" aria-hidden="true"><use id="phase-icon" href="#icon-settings"/></svg>
-        <svg id="phase-paused" class="icon pause-badge" aria-hidden="true" hidden><use href="#icon-pause"/></svg>
-      </div>
-      <div id="clock" role="timer" aria-label="残り時間">00:00</div>
-      <div class="timer-controls">
-        <button id="skip" class="icon-button" type="button" aria-label="次の工程へ" title="次の工程へ" hidden><svg class="icon" aria-hidden="true"><use href="#icon-next"/></svg></button>
-        <button id="main-action" class="icon-button" type="button" aria-label="手順を設定" title="手順を設定" disabled><svg class="icon" aria-hidden="true"><use id="main-action-icon" href="#icon-settings"/></svg></button>
-        <button id="end" class="icon-button" type="button" aria-label="終了して記録" title="終了して記録" hidden><svg class="icon" aria-hidden="true"><use href="#icon-stop"/></svg></button>
-      </div>
-      <p id="status" role="status" aria-live="polite"></p>
-      <div class="active-task-summary">
-        <h2 class="sr-only">この回のタスクとメモ</h2>
-        <button id="active-task-name" type="button" aria-label="選択中のタスクの詳細を開く" hidden></button>
-        <p id="active-task-hint" class="subtle" hidden></p>
-      </div>
-      </div>
-      <div id="active-task-panel">
-        <ul id="task-picker-list" class="item-list" aria-label="この回のタスクを選ぶ"></ul>
-        <form id="timer-quick-task-form" class="inline-form">
-          <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="タスクを追加" aria-label="新しいタスクのやりたいこと" required>
-          <button type="submit" aria-label="タスクを追加">＋</button>
-        </form>
-      </div>
-      <div id="timer-task-details" hidden>
-        <h2 class="sr-only">計測中のタスクの詳細</h2>
-        <label>タイトル <input id="timer-task-title" type="text" maxlength="100" required></label>
-        <label class="timer-memo-field">メモ <textarea id="timer-task-memo" maxlength="500"></textarea></label>
-        <label>テーマ <select id="timer-task-group"></select></label>
-        <label>サブテーマ <select id="timer-task-child"></select></label>
-      </div>
+        <div class="timer-face">
+          <div class="active-task-summary">
+            <h2 class="sr-only">Current task and notes</h2>
+            <button id="active-task-name" type="button" aria-label="Edit selected task" hidden></button>
+            <p id="active-task-hint" class="subtle" hidden></p>
+          </div>
+          <h2 id="idle-task-title">Practice timer</h2>
+          <div id="timer-dial" class="timer-dial">
+            <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="timer-ring-track" cx="50" cy="50" r="47"/>
+              <circle id="timer-ring-remaining" cx="50" cy="50" r="47" pathLength="100" stroke-dasharray="100 100"/>
+            </svg>
+            <div class="timer-dial-content">
+              <div id="phase-name" class="phase" role="img" aria-label="No timer sequence" title="No timer sequence">
+                <svg class="icon" aria-hidden="true"><use id="phase-icon" href="#icon-settings"/></svg>
+                <svg id="phase-paused" class="icon pause-badge" aria-hidden="true" hidden><use href="#icon-pause"/></svg>
+              </div>
+              <div id="clock" role="timer" aria-label="Time remaining">00:00</div>
+            </div>
+          </div>
+          <div class="timer-controls">
+            <button id="skip" class="icon-button" type="button" aria-label="Next phase" title="Next phase" hidden><svg class="icon" aria-hidden="true"><use href="#icon-next"/></svg></button>
+            <button id="main-action" class="icon-button" type="button" aria-label="Set up timer" title="Set up timer" disabled><svg class="icon" aria-hidden="true"><use id="main-action-icon" href="#icon-settings"/></svg></button>
+            <button id="end" class="icon-button" type="button" aria-label="End and log" title="End and log" hidden><svg class="icon" aria-hidden="true"><use href="#icon-stop"/></svg></button>
+          </div>
+          <div class="timer-logged" aria-label="Work logged this session" title="Work logged this session">
+            <svg class="icon" aria-hidden="true"><use href="#icon-growth"/></svg>
+            <span class="sr-only">Logged </span><span id="timer-logged">0h 00m</span>
+          </div>
+          <p id="status" role="status" aria-live="polite"></p>
+        </div>
+        <div id="active-task-panel">
+          <h2 class="practice-tasks-heading">Practice tasks</h2>
+          <ul id="task-picker-list" class="item-list" aria-label="Choose a task for this session"></ul>
+          <form id="timer-quick-task-form" class="inline-form">
+            <input id="timer-quick-task-title" type="text" maxlength="100" placeholder="Add task" aria-label="New practice task" required>
+            <button type="submit" aria-label="Add task">＋</button>
+          </form>
+        </div>
+        <div id="timer-task-details" hidden>
+          <h2 class="sr-only">Current task details</h2>
+          <label>Title <input id="timer-task-title" type="text" maxlength="100" required></label>
+          <label class="timer-memo-field">Notes <textarea id="timer-task-memo" maxlength="500"></textarea></label>
+          <label>Theme <select id="timer-task-group"></select></label>
+          <label>Subtheme <select id="timer-task-child"></select></label>
+        </div>
       </div>
     </section>
 
-    <section id="tasks-view" aria-label="タスク" hidden>
+    <section id="tasks-view" aria-label="Tasks" hidden>
       <div class="task-feedback">
         <p id="task-status" class="sr-only" role="status" aria-live="polite"></p>
       </div>
       <ul id="task-list" class="item-list"></ul>
       <details id="completed-section">
-        <summary>完了済み <span id="completed-count"></span></summary>
+        <summary>Completed <span id="completed-count"></span></summary>
         <ul id="completed-list" class="item-list"></ul>
       </details>
       <form id="quick-task-form" class="inline-form">
-        <input id="quick-task-title" type="text" maxlength="100" placeholder="タスクを追加" aria-label="タスクを追加" required>
-        <button type="submit">＋追加</button>
-        <button id="task-details-add" class="quiet-button" type="button">詳細をつける</button>
+        <input id="quick-task-title" type="text" maxlength="100" placeholder="Add task" aria-label="Add task" required>
+        <button type="submit">+ Add</button>
+        <button id="task-details-add" class="quiet-button" type="button">Add details</button>
       </form>
     </section>
 
-    <section id="growth-view" aria-label="振り返り" hidden>
-      <div id="period-tabs" class="period-tabs" role="group" aria-label="集計期間">
-        <button id="period-day" type="button">日</button>
-        <button id="period-week" type="button">週</button>
-        <button id="period-month" type="button">月</button>
-        <button id="period-year" type="button">年</button>
+    <section id="growth-view" aria-label="Review" hidden>
+      <div id="period-tabs" class="period-tabs" role="group" aria-label="Review period">
+        <button id="period-day" type="button">Day</button>
+        <button id="period-week" type="button">Week</button>
+        <button id="period-month" type="button">Month</button>
+        <button id="period-year" type="button">Year</button>
       </div>
       <div class="period-navigation">
-        <button id="period-prev" type="button" aria-label="前の期間">←</button>
+        <button id="period-prev" type="button" aria-label="Previous period">←</button>
         <strong id="period-label"></strong>
-        <button id="period-next" type="button" aria-label="次の期間">→</button>
+        <button id="period-next" type="button" aria-label="Next period">→</button>
       </div>
       <div class="growth-summary">
-        <p class="growth-period-total"><span class="sr-only">選択期間の作業時間（時間・分）</span><span id="growth-total"></span></p>
+        <p class="growth-period-total"><span class="sr-only">Work duration for the selected period in hours and minutes</span><span id="growth-total"></span></p>
         <p id="growth-all-total" class="subtle"></p>
       </div>
       <div id="period-chart-layout" class="period-chart-layout">
         <div class="period-axis" aria-hidden="true"><span id="period-chart-max"></span><span>0h 00m</span></div>
-        <div id="period-chart" class="period-chart" role="group" aria-label="作業時間のグラフ"></div>
+        <div id="period-chart" class="period-chart" role="group" aria-label="Work duration chart"></div>
       </div>
       <p id="day-untimed" class="subtle" hidden></p>
       <section id="day-records">
         <div class="day-record-heading">
-          <h3>この日の記録 <span id="day-record-count"></span></h3>
+          <h3>Daily records <span id="day-record-count"></span></h3>
         </div>
         <div id="record-list"></div>
       </section>
     </section>
 
-    <section id="themes-view" aria-label="テーマ" hidden>
-      <div class="period-tabs theme-period-tabs" role="group" aria-label="テーマの集計期間">
-        <button id="theme-period-day" type="button">日</button>
-        <button id="theme-period-week" type="button">週</button>
-        <button id="theme-period-month" type="button">月</button>
-        <button id="theme-period-year" type="button">年</button>
-        <button id="theme-period-all" type="button">全期間</button>
+    <section id="themes-view" aria-label="Themes" hidden>
+      <div class="period-tabs theme-period-tabs" role="group" aria-label="Theme period">
+        <button id="theme-period-day" type="button">Day</button>
+        <button id="theme-period-week" type="button">Week</button>
+        <button id="theme-period-month" type="button">Month</button>
+        <button id="theme-period-year" type="button">Year</button>
+        <button id="theme-period-all" type="button">All time</button>
       </div>
       <div class="period-navigation">
-        <button id="theme-period-prev" type="button" aria-label="テーマの前の期間">←</button>
+        <button id="theme-period-prev" type="button" aria-label="Previous theme period">←</button>
         <strong id="theme-period-label"></strong>
-        <button id="theme-period-next" type="button" aria-label="テーマの次の期間">→</button>
+        <button id="theme-period-next" type="button" aria-label="Next theme period">→</button>
       </div>
       <div id="theme-scale" class="theme-scale" aria-hidden="true"><span>0h 00m</span><span id="theme-scale-max"></span></div>
       <div id="group-list"></div>
       <div id="theme-unset"></div>
       <div id="theme-add">
         <form id="group-form" class="inline-form">
-          <input id="group-title" type="text" maxlength="60" placeholder="テーマを追加" aria-label="テーマの名前" required>
-          <button type="submit">追加</button>
+          <input id="group-title" type="text" maxlength="60" placeholder="Add theme" aria-label="Theme name" required>
+          <button type="submit">Add</button>
         </form>
       </div>
       <p id="growth-status" class="sr-only" role="status" aria-live="polite"></p>
     </section>
 
-    <section id="settings-view" aria-label="手順の設定" hidden>
-      <h1>練習タイマー <span class="beta">beta</span></h1>
-      <h2>作業と休憩の流れ</h2>
+    <section id="settings-view" aria-label="Timer settings" hidden>
+      <h1>Practice timer <span class="beta">beta</span></h1>
+      <h2>Work & break sequence</h2>
       <ol id="step-list"></ol>
-      <button id="add-step" type="button">＋追加</button>
+      <button id="add-step" type="button">+ Add</button>
       <div class="controls settings-actions">
-        <button id="save-settings" type="button">保存</button>
-        <button id="cancel-settings" type="button">キャンセル</button>
+        <button id="save-settings" type="button">Save</button>
+        <button id="cancel-settings" type="button">Cancel</button>
       </div>
       <p id="settings-error" role="alert"></p>
-      <h2>振り返り <span class="settings-hint">自動保存</span></h2>
+      <h2>Review <span class="settings-hint">Autosaved</span></h2>
       <div class="day-boundary-setting">
-        <label for="day-start">1日の区切り</label>
+        <label for="day-start">Day starts at</label>
         <input id="day-start" type="time" step="60" value="05:00" required>
       </div>
       <p id="day-start-error" role="alert"></p>
-      <h2>通知音 <span class="settings-hint">自動保存</span></h2>
+      <h2>Alert sounds <span class="settings-hint">Autosaved</span></h2>
       <div class="sound-settings">
         <div class="sound-field">
-          <div class="sound-field-heading"><label for="sound-volume">音量</label><output id="sound-volume-value" for="sound-volume">20%</output></div>
+          <div class="sound-field-heading"><label for="sound-volume">Volume</label><output id="sound-volume-value" for="sound-volume">20%</output></div>
           <input id="sound-volume" type="range" min="0" max="100" step="1" value="20">
         </div>
         <div class="sound-field">
-          <div class="sound-field-heading"><label for="sound-pitch">音の高さ</label><output id="sound-pitch-value" for="sound-pitch">標準</output></div>
+          <div class="sound-field-heading"><label for="sound-pitch">Pitch</label><output id="sound-pitch-value" for="sound-pitch">Default</output></div>
           <input id="sound-pitch" type="range" min="-12" max="12" step="1" value="0">
         </div>
-        <div class="sound-preview" role="group" aria-label="通知音を試聴">
-          <button id="preview-work" type="button" aria-label="作業の音を試聴" title="作業の音を試聴"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>作業</button>
-          <button id="preview-rest" type="button" aria-label="休憩の音を試聴" title="休憩の音を試聴"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>休憩</button>
+        <div class="sound-preview" role="group" aria-label="Preview alert sounds">
+          <button id="preview-work" type="button" aria-label="Preview work sound" title="Preview work sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Work</button>
+          <button id="preview-rest" type="button" aria-label="Preview break sound" title="Preview break sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Break</button>
         </div>
       </div>
       <p id="sound-status" role="alert"></p>
-      <button id="permission" type="button">通知を許可</button>
+      <button id="permission" type="button">Enable notifications</button>
       <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
-      <h2>バックアップ</h2>
+      <h2>Backup</h2>
       <div class="backup-actions">
-        <input id="backup-label" type="text" maxlength="40" placeholder="保存先の名前（例：iCloud Drive）" aria-label="追加する保存先の名前">
-        <button id="backup-add" type="button" disabled>保存先を追加</button>
-        <button id="backup-save" type="button" disabled>すべて今すぐ保存</button>
+        <input id="backup-label" type="text" maxlength="40" placeholder="Destination name (e.g. iCloud Drive)" aria-label="New backup destination name">
+        <button id="backup-add" type="button" disabled>Add destination</button>
+        <button id="backup-save" type="button" disabled>Save all now</button>
       </div>
       <div id="backup-targets"></div>
-      <label class="backup-auto"><input id="backup-auto" type="checkbox" checked> 保存先へ自動保存</label>
+      <label class="backup-auto"><input id="backup-auto" type="checkbox" checked> Autosave to destinations</label>
       <p id="backup-auto-status" class="subtle" role="status" aria-live="polite"></p>
       <p id="backup-file-message" role="status" aria-live="polite"></p>
-      <button id="export-data" type="button">JSONをダウンロード</button>
-      <label class="import-label">JSONを読み込む <input id="import-file" type="file" accept=".json,application/json"></label>
-      <p class="subtle">読み込みは現在のタスク・時間・テーマ・各設定を置き換えます。計測中は読み込めません。</p>
+      <button id="export-data" type="button">Download JSON</button>
+      <label class="import-label">Import JSON <input id="import-file" type="file" accept=".json,application/json"></label>
+      <p class="subtle">Import replaces all current tasks, time, themes and settings. End your session before importing.</p>
       <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
 
     <div id="task-toast" class="task-toast" role="status" aria-live="polite" hidden>
-      <button id="task-undo" type="button" hidden>完了を取り消す</button>
+      <button id="task-undo" type="button" hidden>Undo completion</button>
     </div>
 
     <dialog id="task-dialog" aria-labelledby="task-dialog-title">
-      <h2 id="task-dialog-title">タスクを追加</h2>
+      <h2 id="task-dialog-title">Add task</h2>
       <form id="task-form">
-        <label>やりたいこと <input id="task-title" type="text" maxlength="100" required></label>
-        <label>メモ <textarea id="task-first-step" rows="2" maxlength="500"></textarea></label>
+        <label>Title <input id="task-title" type="text" maxlength="100" required></label>
+        <label>Notes <textarea id="task-first-step" rows="2" maxlength="500"></textarea></label>
         <div class="category-fields">
-          <label>テーマ <select id="task-group"></select></label>
-          <label>サブテーマ <select id="task-child"></select></label>
+          <label>Theme <select id="task-group"></select></label>
+          <label>Subtheme <select id="task-child"></select></label>
         </div>
         <div class="task-actions">
-          <button id="task-save" type="submit">保存</button>
-          <button id="task-cancel" type="button">キャンセル</button>
+          <button id="task-save" type="submit">Save</button>
+          <button id="task-cancel" type="button">Cancel</button>
         </div>
       </form>
     </dialog>
     <dialog id="theme-name-dialog" aria-labelledby="theme-name-title">
-      <h2 id="theme-name-title">テーマの名前</h2>
+      <h2 id="theme-name-title">Theme name</h2>
       <form id="theme-name-form">
-        <label>名前 <input id="theme-name" type="text" maxlength="60" required></label>
+        <label>Name <input id="theme-name" type="text" maxlength="60" required></label>
         <p id="theme-name-error" role="alert"></p>
         <div class="task-actions">
-          <button type="submit">保存</button>
-          <button id="theme-name-cancel" type="button">戻る</button>
+          <button type="submit">Save</button>
+          <button id="theme-name-cancel" type="button">Back</button>
         </div>
       </form>
       <div class="record-delete-actions">
-        <button id="theme-name-delete" type="button">テーマを削除</button>
+        <button id="theme-name-delete" type="button">Delete theme</button>
       </div>
     </dialog>
     <dialog id="record-dialog" aria-labelledby="record-dialog-title">
-      <h2 id="record-dialog-title">記録を修正</h2>
+      <h2 id="record-dialog-title">Edit record</h2>
       <form id="record-form">
-        <label>開始日時 <input id="record-start" type="datetime-local" step="1"></label>
-        <label>終了日時 <input id="record-end" type="datetime-local" step="1" required></label>
-        <label id="record-duration-label" hidden>作業時間（分） <input id="record-duration" type="number" min="0.01" step="any"></label>
-        <label>タスク <select id="record-task"></select></label>
+        <label>Start date & time <input id="record-start" type="datetime-local" step="1"></label>
+        <label>End date & time <input id="record-end" type="datetime-local" step="1" required></label>
+        <label id="record-duration-label" hidden>Work duration (minutes) <input id="record-duration" type="number" min="0.01" step="any"></label>
+        <label>Task <select id="record-task"></select></label>
         <div class="category-fields">
-          <label>テーマ <select id="record-group"></select></label>
-          <label>サブテーマ <select id="record-child"></select></label>
+          <label>Theme <select id="record-group"></select></label>
+          <label>Subtheme <select id="record-child"></select></label>
         </div>
         <p id="record-error" role="alert"></p>
         <div class="task-actions">
-          <button type="submit">保存</button>
-          <button id="record-cancel" type="button">戻る</button>
+          <button type="submit">Save</button>
+          <button id="record-cancel" type="button">Back</button>
         </div>
       </form>
       <div class="record-delete-actions">
-        <button id="record-delete" type="button">この記録を削除</button>
-        <button id="record-delete-group" type="button" hidden>この起動分をすべて削除</button>
+        <button id="record-delete" type="button">Delete record</button>
+        <button id="record-delete-group" type="button" hidden>Delete session records</button>
       </div>
     </dialog>
   </main>

@@ -56,11 +56,11 @@ function load() {
       const id = newId();
       sessions.push({ id, recordGroupId: id, startedAt: null, endedAt: Date.now(),
         workMs: totalWorkMs - (run?.sessionWorkMs || 0),
-        taskId: null, taskTitle: '以前の累計', targetId: null });
+        taskId: null, taskTitle: 'Previous total', targetId: null });
     }
   } catch {
     localDataReadable = false;
-    $('status').textContent = '保存データを読めませんでした。設定を確認してください。';
+    $('status').textContent = 'Could not read saved data. Check Settings.';
   }
 }
 
@@ -73,7 +73,7 @@ function persist() {
     lastSaved = Date.now();
     return true;
   } catch {
-    $('status').textContent = 'ブラウザに保存できません。ストレージの設定を確認してください。';
+    $('status').textContent = 'Could not save in this browser. Check your storage settings.';
     return false;
   }
 }
@@ -91,15 +91,20 @@ function timeText(ms, roundUp = false) {
 function renderTimer() {
   const activeSteps = run?.steps ?? steps;
   const phase = run?.phase ?? activeSteps[0]?.type;
-  const phaseLabel = phase === 'work' ? '作業' : '休憩';
-  const stateLabel = run ? (run.status === 'running' ? '中' : '・一時停止中') : 'の準備';
-  labelControl($('phase-name'), phase ? phaseLabel + stateLabel : '手順未設定');
+  const phaseLabel = phase === 'work' ? 'Work' : 'Break';
+  const stateLabel = run ? (run.status === 'running' ? ' · running' : ' · paused') : ' · ready';
+  labelControl($('phase-name'), phase ? phaseLabel + stateLabel : 'No timer sequence');
   $('phase-icon').setAttribute('href', `#icon-${phase === 'work' ? 'work' : phase ? 'rest' : 'settings'}`);
   $('phase-paused').hidden = run?.status !== 'paused';
   const remainingMs = run?.remainingMs ?? ((steps[0]?.minutes || 0) * 60_000);
   $('clock').textContent = timeText(remainingMs, true);
   $('clock').classList.toggle('has-hours', remainingMs >= 3_600_000);
-  labelControl($('main-action'), run?.status === 'running' ? '一時停止' : run ? '再開' : steps.length ? '開始' : '手順を設定');
+  const phaseMs = (activeSteps[run?.row ?? 0]?.minutes || 0) * 60_000;
+  const remaining = phaseMs ? Math.max(0, Math.min(1, remainingMs / phaseMs)) : 0;
+  $('timer-ring-remaining').setAttribute('stroke-dasharray', `${remaining * 100} 100`);
+  $('timer-dial').classList.toggle('is-rest', phase === 'rest');
+  $('timer-logged').textContent = durationText(run?.sessionWorkMs || 0);
+  labelControl($('main-action'), run?.status === 'running' ? 'Pause' : run ? 'Resume' : steps.length ? 'Start' : 'Set up timer');
   $('main-action-icon').setAttribute('href', `#icon-${run?.status === 'running' ? 'pause' : run || steps.length ? 'play' : 'settings'}`);
   $('main-action').disabled = false;
   $('skip').hidden = !run;
@@ -109,7 +114,7 @@ function renderTimer() {
   if (run) {
     const nextType = !run.looping && run.row < run.steps.length - 1
       ? run.steps[run.row + 1].type : run.phase === 'work' ? 'rest' : 'work';
-    labelControl($('skip'), nextType === 'work' ? '次の作業へ' : '休憩へ進む');
+    labelControl($('skip'), nextType === 'work' ? 'Next work phase' : 'Skip to break');
   }
 }
 
@@ -130,6 +135,7 @@ function renderTaskChoice(rebuildPicker = true) {
   $('active-task-name').textContent = task?.title || '';
   $('active-task-name').title = task?.title || '';
   $('active-task-name').hidden = !task;
+  $('idle-task-title').hidden = Boolean(task);
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;
@@ -142,7 +148,7 @@ function renderTaskChoice(rebuildPicker = true) {
       const selected = row.getAttribute('data-task-id') === selectedTaskId;
       choose.setAttribute('aria-pressed', String(selected));
       const task = tasks.find((item) => item.id === row.getAttribute('data-task-id'));
-      choose.setAttribute('aria-label', `${task.title}を${selected ? '編集' : 'この回に選ぶ'}`);
+      choose.setAttribute('aria-label', `${selected ? 'Edit' : 'Select'} ${task.title}`);
       choose.disabled = hideList;
     }
   }
@@ -156,7 +162,7 @@ function renderTimerTaskChildren(selected = '') {
   const group = groups.find((item) => item.id === $('timer-task-group').value);
   const select = $('timer-task-child');
   select.replaceChildren();
-  appendOption(select, '', group ? 'サブテーマなし' : 'テーマを選択');
+  appendOption(select, '', group ? 'No subtheme' : 'Choose a theme');
   for (const child of group?.children || []) appendOption(select, child.id, child.title);
   select.value = group?.children.some((child) => child.id === selected) ? selected : '';
   select.disabled = !group?.children.length;
@@ -168,7 +174,7 @@ function renderTimerTaskDetails(task) {
   const { groupId, childId } = taskTargetParts(task.targetId);
   const select = $('timer-task-group');
   select.replaceChildren();
-  appendOption(select, '', '未設定');
+  appendOption(select, '', 'Unassigned');
   for (const group of groups) appendOption(select, group.id, group.title);
   select.value = groupId;
   renderTimerTaskChildren(childId);
@@ -192,12 +198,12 @@ function renderTaskPicker() {
   const available = tasks.filter((task) => task.completedAt == null);
   if (!available.length) {
     const empty = document.createElement('li');
-    empty.textContent = '未完了のタスクはありません。新しく追加できます。';
+    empty.textContent = 'No tasks yet. Add something to practice.';
     list.append(empty);
   }
   for (const task of available) {
     const item = document.createElement('li');
-    const choose = rowButton(task.title, `${task.title}を${task.id === selectedTaskId ? '編集' : 'この回に選ぶ'}`, () => {
+    const choose = rowButton(task.title, `${task.id === selectedTaskId ? 'Edit' : 'Select'} ${task.title}`, () => {
       if (task.id === selectedTaskId) openTaskEditor(task);
       else chooseTask(task, false);
     });
@@ -229,9 +235,9 @@ function switchView(name) {
 
 function typeField(value, index) {
   const wrapper = document.createElement('label');
-  wrapper.textContent = '種類';
+  wrapper.textContent = 'Type';
   const select = document.createElement('select');
-  for (const [text, optionValue] of [['選択', ''], ['作業', 'work'], ['休憩', 'rest']]) {
+  for (const [text, optionValue] of [['Choose', ''], ['Work', 'work'], ['Break', 'rest']]) {
     const option = document.createElement('option');
     option.textContent = text;
     option.value = optionValue;
@@ -245,7 +251,7 @@ function typeField(value, index) {
 
 function numberField(value, index) {
   const wrapper = document.createElement('label');
-  wrapper.textContent = '時間（分）';
+  wrapper.textContent = 'Minutes';
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0.1';
@@ -304,9 +310,9 @@ function renderSettings() {
     const controls = document.createElement('div');
     controls.className = 'step-controls';
     controls.append(
-      rowButton('↑', `${index + 1}行目を上へ`, () => moveRow(index, index - 1), index === 0),
-      rowButton('↓', `${index + 1}行目を下へ`, () => moveRow(index, index + 1), index === draft.length - 1),
-      rowButton('削除', `${index + 1}行目を削除`, () => { draft.splice(index, 1); renderSettings(); }),
+      rowButton('↑', `Move step ${index + 1} up`, () => moveRow(index, index - 1), index === 0),
+      rowButton('↓', `Move step ${index + 1} down`, () => moveRow(index, index + 1), index === draft.length - 1),
+      rowButton('Delete', `Delete step ${index + 1}`, () => { draft.splice(index, 1); renderSettings(); }),
     );
     row.append(controls);
     item.append(row);
@@ -336,7 +342,7 @@ function renderTaskChildren(selected = '') {
   const group = groups.find((item) => item.id === $('task-group').value);
   const select = $('task-child');
   select.replaceChildren();
-  appendOption(select, '', group ? 'サブテーマなし' : 'テーマを選択');
+  appendOption(select, '', group ? 'No subtheme' : 'Choose a theme');
   for (const child of group?.children || []) appendOption(select, child.id, child.title);
   select.value = group?.children.some((child) => child.id === selected) ? selected : '';
   select.disabled = !group || !group.children.length;
@@ -351,12 +357,12 @@ function openTaskEditor(task = null, source = null) {
   const { groupId, childId } = taskTargetParts(task?.targetId);
   const groupSelect = $('task-group');
   groupSelect.replaceChildren();
-  appendOption(groupSelect, '', '未設定');
+  appendOption(groupSelect, '', 'Unassigned');
   for (const group of groups) appendOption(groupSelect, group.id, group.title);
   groupSelect.value = groupId;
   renderTaskChildren(childId);
-  $('task-dialog-title').textContent = task ? 'タスクを編集' : 'タスクを追加';
-  $('task-save').textContent = task ? '変更を保存' : '追加';
+  $('task-dialog-title').textContent = task ? 'Edit task' : 'Add task';
+  $('task-save').textContent = task ? 'Save changes' : 'Add';
   $('task-dialog').showModal();
   $('task-title').focus();
 }
@@ -381,7 +387,7 @@ function saveTask() {
   resetTaskForm();
   renderTasks();
   renderTaskChoice();
-  const message = updating ? 'タスクを更新しました。' : 'タスクを追加しました。';
+  const message = updating ? 'Task updated.' : 'Task added.';
   $('task-status').textContent = message;
   if (!$('tasks-view').hidden) document.getElementById(`task-title-${task.id}`)?.focus();
   else if (!$('timer-view').hidden) $('main-action').focus();
@@ -395,7 +401,7 @@ function addQuickTask(title, selectAfter = false) {
   renderTasks();
   renderTaskChoice();
   const message = selectedTaskId === task.id
-    ? 'タスクを追加して、この回に選びました。' : 'タスクを追加しました。';
+    ? 'Task added and selected for this session.' : 'Task added.';
   $('task-status').textContent = message;
   if (!$('timer-view').hidden && selectedTaskId === task.id) $('main-action').focus();
 }
@@ -435,7 +441,7 @@ function setTaskCompleted(task, completed) {
       rows[Math.max(0, Math.min(activeIndex, rows.length - 1))]?.querySelector('input')?.focus({ preventScroll: true });
     } else document.getElementById(`task-title-${task.id}`)?.focus({ preventScroll: true });
   });
-  $('task-status').textContent = completed ? `「${task.title}」を完了にしました。` : 'タスクを未完了に戻しました。';
+  $('task-status').textContent = completed ? `Completed “${task.title}”.` : 'Task marked as unfinished.';
 }
 
 function taskRow(task, completed) {
@@ -446,7 +452,7 @@ function taskRow(task, completed) {
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = completed;
-  check.setAttribute('aria-label', `${task.title}を${completed ? '未完了に戻す' : '完了にする'}`);
+  check.setAttribute('aria-label', `${completed ? 'Mark unfinished' : 'Mark complete'}: ${task.title}`);
   check.addEventListener('change', () => setTaskCompleted(task, check.checked));
   checkLabel.append(check);
   const details = document.createElement('details');
@@ -458,42 +464,42 @@ function taskRow(task, completed) {
   content.className = 'task-detail-content';
   if (task.firstStep) {
     const firstStep = document.createElement('p');
-    firstStep.textContent = `メモ：${task.firstStep}`;
+    firstStep.textContent = `Notes: ${task.firstStep}`;
     content.append(firstStep);
   }
   const target = targetLabel(groups, task.targetId);
   if (target) {
     const category = document.createElement('p');
     category.className = 'subtle';
-    category.textContent = `テーマ：${target}`;
+    category.textContent = `Theme: ${target}`;
     content.append(category);
   }
   if (completed) {
     const date = document.createElement('p');
     date.className = 'subtle';
-    date.textContent = `完了：${new Date(task.completedAt).toLocaleDateString('ja-JP')}`;
+    date.textContent = `Completed: ${new Date(task.completedAt).toLocaleDateString('en-US')}`;
     content.append(date);
   }
   const actions = document.createElement('div');
   actions.className = 'task-actions';
   if (!completed && !(run && selectedTaskId)) {
-    actions.append(rowButton('このタスクを選ぶ', `${task.title}をこの回に選ぶ`, () => chooseTask(task)));
+    actions.append(rowButton('Use this task', `Select ${task.title}`, () => chooseTask(task)));
   }
-  actions.append(rowButton('編集', `${task.title}を編集`, () => openTaskEditor(task)));
+  actions.append(rowButton('Edit', `Edit ${task.title}`, () => openTaskEditor(task)));
   const menu = document.createElement('details');
   menu.className = 'task-menu';
   const menuTitle = document.createElement('summary');
-  menuTitle.textContent = 'その他の操作';
-  menu.append(menuTitle, rowButton('削除', `${task.title}を削除`, () => {
+  menuTitle.textContent = 'More actions';
+  menu.append(menuTitle, rowButton('Delete', `Delete ${task.title}`, () => {
     if (run && selectedTaskId === task.id) return;
-    if (!confirm(`「${task.title}」を削除しますか？過去の計測記録は残ります。`)) return;
+    if (!confirm(`Delete “${task.title}”? Existing time records will be kept.`)) return;
     tasks = tasks.filter((item) => item.id !== task.id);
     if (selectedTaskId === task.id) selectedTaskId = null;
     if (taskUndo?.taskId === task.id) clearTaskUndo();
     persist();
     renderTasks();
     renderTaskChoice();
-    $('task-status').textContent = 'タスクを削除しました。';
+    $('task-status').textContent = 'Task deleted.';
     $('quick-task-title').focus();
   }, Boolean(run && selectedTaskId === task.id)));
   content.append(actions, menu);
@@ -518,7 +524,7 @@ function moveTask(id, targetId, after, listId) {
   renderTaskChoice();
   const handleId = `${listId}-drag-${id}`;
   document.getElementById(handleId)?.focus({ preventScroll: true });
-  $('task-status').textContent = `「${task.title}」の順序を変更しました。`;
+  $('task-status').textContent = `Reordered “${task.title}”.`;
 }
 
 function cancelTaskDrag() {
@@ -549,8 +555,8 @@ function taskDragHandle(task, row, listId) {
   handle.id = `${listId}-drag-${task.id}`;
   handle.className = 'task-drag-handle';
   handle.textContent = '⠿';
-  handle.setAttribute('aria-label', `${task.title}を並べ替え（ドラッグまたは上下キー）`);
-  handle.title = 'ドラッグで並べ替え';
+  handle.setAttribute('aria-label', `Reorder ${task.title} (drag or use arrow keys)`);
+  handle.title = 'Drag to reorder';
   handle.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     event.preventDefault();
@@ -622,22 +628,22 @@ function renderTasks() {
   for (const task of completed) completedList.append(taskRow(task, true));
   if (!active.length) {
     const empty = document.createElement('li');
-    empty.textContent = '未完了のタスクはありません。上から追加できます。';
+    empty.textContent = 'No unfinished tasks. Add one below.';
     activeList.append(empty);
   }
   if (!completed.length) {
     const empty = document.createElement('li');
-    empty.textContent = '完了済みのタスクはまだありません。';
+    empty.textContent = 'No completed tasks yet.';
     completedList.append(empty);
   }
 }
 
 function renameItem(item, label) {
   renamingThemeItem = item;
-  $('theme-name-title').textContent = `${label}の名前`;
+  $('theme-name-title').textContent = `${label} name`;
   $('theme-name').value = item.title;
   $('theme-name-error').textContent = '';
-  $('theme-name-delete').textContent = `${label}を削除`;
+  $('theme-name-delete').textContent = `Delete ${label.toLowerCase()}`;
   $('theme-name-dialog').showModal();
   $('theme-name').focus();
 }
@@ -646,7 +652,7 @@ $('theme-name-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const title = $('theme-name').value.trim();
   if (!renamingThemeItem || !title || title.length > 60) {
-    $('theme-name-error').textContent = '名前は1〜60文字で入力してください。';
+    $('theme-name-error').textContent = 'Enter a name between 1 and 60 characters.';
     return;
   }
   renamingThemeItem.title = title;
@@ -671,7 +677,7 @@ $('theme-name-delete').addEventListener('click', () => {
 
 function removeGroup(group, child = null) {
   const label = child?.title || group.title;
-  if (!confirm(`「${label}」を削除しますか？記録のテーマは未設定になります。`)) return false;
+  if (!confirm(`Delete “${label}”? Its assignments will be cleared from records.`)) return false;
   const removedIds = child ? [child.id] : [group.id, ...group.children.map((item) => item.id)];
   clearTargets(removedIds, tasks, sessions);
   if (child) group.children = group.children.filter((item) => item.id !== child.id);
@@ -740,10 +746,10 @@ function periodLabel(bounds, kind = periodKind) {
   const start = new Date(bounds.start);
   const end = new Date(bounds.end);
   end.setDate(end.getDate() - 1);
-  if (kind === 'year') return `${start.getFullYear()}年`;
-  if (kind === 'month') return `${start.getFullYear()}年${start.getMonth() + 1}月`;
-  if (kind === 'week') return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
-  return start.toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' });
+  if (kind === 'year') return String(start.getFullYear());
+  if (kind === 'month') return start.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  if (kind === 'week') return `${start.toLocaleDateString('ja-JP')} – ${end.toLocaleDateString('ja-JP')}`;
+  return `${start.toLocaleDateString('ja-JP')} (${start.toLocaleDateString('en-US', { weekday: 'short' })})`;
 }
 
 function movePeriod(direction) {
@@ -771,7 +777,7 @@ function renderGrowth() {
     $('period-' + kind).setAttribute('aria-pressed', String(kind === periodKind));
   }
   $('growth-total').textContent = durationText(periodMs);
-  $('growth-all-total').textContent = `全期間 ${durationText(run?.totalWorkMs ?? totalWorkMs)}`;
+  $('growth-all-total').textContent = `All time ${durationText(run?.totalWorkMs ?? totalWorkMs)}`;
   const chart = $('period-chart');
   chart.replaceChildren();
   const buckets = periodBuckets(periodKind, periodAnchor, sessions, dayStartMinutes);
@@ -792,10 +798,10 @@ function renderGrowth() {
     fill.style.height = `${bucket.workMs / largest * 100}%`;
     const label = document.createElement('small');
     const hour = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const bucketLabel = periodKind === 'day' ? `${hour} ～ ${new Date(bucket.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`
-      : periodKind === 'year' ? `${date.getMonth() + 1}月`
+    const bucketLabel = periodKind === 'day' ? `${hour} – ${new Date(bucket.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+      : periodKind === 'year' ? date.toLocaleDateString('en-US', { month: 'short' })
       : `${date.getMonth() + 1}/${date.getDate()}`;
-    label.textContent = periodKind === 'day' ? (index % 3 === 0 ? (date.getMinutes() ? hour : `${date.getHours()}時`) : '\u00a0')
+    label.textContent = periodKind === 'day' ? (index % 3 === 0 ? (date.getMinutes() ? hour : String(date.getHours())) : '\u00a0')
       : periodKind === 'year' ? bucketLabel
       : periodKind === 'week' ? bucketLabel : (date.getDate() === 1 || date.getDate() % 5 === 0 ? String(date.getDate()) : '\u00a0');
     item.setAttribute('aria-label', `${bucketLabel} ${durationText(bucket.workMs)}`);
@@ -812,7 +818,7 @@ function renderGrowth() {
   const untimedMs = periodSessions.filter((session) => session.startedAt == null)
     .reduce((sum, session) => sum + session.workMs, 0);
   $('day-untimed').hidden = periodKind !== 'day' || untimedMs === 0;
-  $('day-untimed').textContent = `開始時刻なし ${durationText(untimedMs)}`;
+  $('day-untimed').textContent = `No start time ${durationText(untimedMs)}`;
   $('day-records').hidden = periodKind !== 'day';
   if (periodKind === 'day') renderDayRecords(bounds);
   renderThemes();
@@ -822,24 +828,24 @@ function renderSubthemeChart(group, original) {
   const section = document.createElement('section');
   section.className = 'subtheme-section';
   const heading = document.createElement('h3');
-  heading.textContent = 'サブテーマ';
+  heading.textContent = 'Subtheme';
   section.append(heading);
   const referenceMs = Math.max(0, ...group.children.map((child) => child.totalMs));
   const scale = themeScale(referenceMs);
   if (referenceMs > 0) {
     const reference = document.createElement('p');
     reference.className = 'subtheme-reference-label subtle';
-    reference.textContent = `目安 ${durationText(referenceMs)}`;
+    reference.textContent = `Reference ${durationText(referenceMs)}`;
     section.append(reference);
   }
   const table = document.createElement('table');
   table.className = 'subtheme-table';
-  table.setAttribute('aria-label', `${group.title}のサブテーマ別作業時間`);
+  table.setAttribute('aria-label', `Work duration by subtheme for ${group.title}`);
   const head = document.createElement('thead');
   const headRow = document.createElement('tr');
   const nameHead = document.createElement('th');
   nameHead.setAttribute('scope', 'col');
-  nameHead.setAttribute('aria-label', 'サブテーマ');
+  nameHead.setAttribute('aria-label', 'Subtheme');
   const scaleHead = document.createElement('th');
   scaleHead.setAttribute('scope', 'col');
   const axis = document.createElement('div');
@@ -852,7 +858,7 @@ function renderSubthemeChart(group, original) {
   scaleHead.append(axis);
   const valueHead = document.createElement('th');
   valueHead.setAttribute('scope', 'col');
-  valueHead.setAttribute('aria-label', '作業時間');
+  valueHead.setAttribute('aria-label', 'Work duration');
   headRow.append(nameHead, scaleHead, valueHead);
   head.append(headRow);
   const body = document.createElement('tbody');
@@ -863,7 +869,7 @@ function renderSubthemeChart(group, original) {
     name.textContent = child.title;
     name.className = 'subtheme-name';
     const originalChild = original.children.find(item => item.id === child.id);
-    name.append(editIconButton(`${child.title}の名前を変更`, () => renameItem(originalChild, 'サブテーマ')));
+    name.append(editIconButton(`Rename ${child.title}`, () => renameItem(originalChild, 'Subtheme')));
     const cell = document.createElement('td');
     cell.className = 'theme-track-cell';
     cell.setAttribute('aria-hidden', 'true');
@@ -897,7 +903,7 @@ function renderThemes() {
   const selected = all ? sessions : sessions.map((session) => ({ ...session,
     workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
   const summary = summarize(groups, selected);
-  $('theme-period-label').textContent = all ? '全期間' : periodLabel(bounds, themePeriodKind);
+  $('theme-period-label').textContent = all ? 'All time' : periodLabel(bounds, themePeriodKind);
   for (const kind of ['day', 'week', 'month', 'year', 'all']) {
     $('theme-period-' + kind).setAttribute('aria-pressed', String(kind === themePeriodKind));
   }
@@ -913,7 +919,7 @@ function renderThemes() {
   groupList.replaceChildren();
   if (!groups.length) {
     const empty = document.createElement('p');
-    empty.textContent = 'テーマはまだありません。下の入力欄から追加できます。';
+    empty.textContent = 'No themes yet. Add one below.';
     groupList.append(empty);
   }
   for (const group of summary.groups) {
@@ -932,7 +938,7 @@ function renderThemes() {
     const chart = themeBar(group.title, group.totalMs, scale);
     const name = chart.children[0].children[0];
     name.className = 'theme-name-label';
-    name.append(editIconButton(`${group.title}の名前を変更`, () => renameItem(original, 'テーマ')));
+    name.append(editIconButton(`Rename ${group.title}`, () => renameItem(original, 'Theme')));
     title.append(chart);
     const chevron = document.createElement('span');
     chevron.className = 'theme-chevron';
@@ -944,7 +950,7 @@ function renderThemes() {
     if (group.children.length) detail.append(renderSubthemeChart(group, original));
     const direct = document.createElement('p');
     direct.className = 'subtle';
-    direct.textContent = `サブテーマなし ${durationText(group.directMs)}`;
+    direct.textContent = `No subtheme ${durationText(group.directMs)}`;
     if (group.directMs > 0) detail.append(direct);
     const form = document.createElement('form');
     form.className = 'inline-form';
@@ -952,11 +958,11 @@ function renderThemes() {
     input.type = 'text';
     input.maxLength = 60;
     input.required = true;
-    input.placeholder = 'サブテーマを追加';
-    input.setAttribute('aria-label', `${group.title}のサブテーマ名`);
+    input.placeholder = 'Add subtheme';
+    input.setAttribute('aria-label', `Subtheme name for ${group.title}`);
     const add = document.createElement('button');
     add.type = 'submit';
-    add.textContent = '＋サブテーマ';
+    add.textContent = '+ Subtheme';
     form.append(input, add);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -972,7 +978,7 @@ function renderThemes() {
     groupList.append(card);
   }
   $('theme-unset').replaceChildren();
-  if (unsetMs > 0) $('theme-unset').append(themeBar('未設定', unsetMs, scale));
+  if (unsetMs > 0) $('theme-unset').append(themeBar('Unassigned', unsetMs, scale));
 }
 
 function renderDayRecords(bounds) {
@@ -985,29 +991,29 @@ function renderDayRecords(bounds) {
     const row = document.createElement('article');
     row.className = 'record-row';
     const workMs = workInRange(session, bounds.start, bounds.end);
-    const heading = growthLine(session.taskTitle || 'タスク未選択', workMs);
+    const heading = growthLine(session.taskTitle || 'No task selected', workMs);
     heading.className += ' record-main';
-    heading.children[0].title = session.taskTitle || 'タスク未選択';
+    heading.children[0].title = session.taskTitle || 'No task selected';
     if (workMs < session.workMs) {
       const marker = document.createElement('small');
       marker.className = 'record-day-marker';
-      marker.textContent = 'この日';
+      marker.textContent = 'This day';
       heading.lastElementChild.append(marker);
     }
     const detail = document.createElement('p');
     detail.className = 'record-meta subtle';
     const range = document.createElement('span');
     range.className = 'record-range';
-    range.textContent = `${session.startedAt == null ? '開始時刻なし' : recordTimeLabel(session.startedAt, bounds)} ～ ${recordTimeLabel(session.endedAt, bounds)}`;
+    range.textContent = `${session.startedAt == null ? 'No start time' : recordTimeLabel(session.startedAt, bounds)} – ${recordTimeLabel(session.endedAt, bounds)}`;
     detail.append(range);
-    const edit = editIconButton(`${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session));
+    const edit = editIconButton(`Edit or delete record: ${session.taskTitle || 'No task selected'}`, () => openRecordEditor(session));
     edit.className = 'record-edit';
     row.append(heading, detail, edit);
     list.append(row);
   }
   if (!records.length) {
     const empty = document.createElement('p');
-    empty.textContent = 'この日の記録はありません。';
+    empty.textContent = 'No records for this day.';
     list.append(empty);
   }
 }
@@ -1016,7 +1022,7 @@ function renderRecordChildren(selected = '') {
   const group = groups.find((item) => item.id === $('record-group').value);
   const select = $('record-child');
   select.replaceChildren();
-  appendOption(select, '', group ? 'サブテーマなし' : 'テーマを選択');
+  appendOption(select, '', group ? 'No subtheme' : 'Choose a theme');
   for (const child of group?.children || []) appendOption(select, child.id, child.title);
   select.value = group?.children.some((child) => child.id === selected) ? selected : '';
   select.disabled = !group || !group.children.length;
@@ -1025,7 +1031,7 @@ function renderRecordChildren(selected = '') {
 function setRecordTarget(targetId) {
   const { groupId, childId } = taskTargetParts(targetId);
   $('record-group').replaceChildren();
-  appendOption($('record-group'), '', '未設定');
+  appendOption($('record-group'), '', 'Unassigned');
   for (const group of groups) appendOption($('record-group'), group.id, group.title);
   $('record-group').value = groupId;
   renderRecordChildren(childId);
@@ -1039,10 +1045,10 @@ function openRecordEditor(session) {
   $('record-duration-label').hidden = session.startedAt != null;
   const taskSelect = $('record-task');
   taskSelect.replaceChildren();
-  appendOption(taskSelect, '', 'タスク未選択');
+  appendOption(taskSelect, '', 'No task selected');
   for (const task of tasks) appendOption(taskSelect, task.id, task.title);
   if (session.taskId && !tasks.some((task) => task.id === session.taskId)) {
-    appendOption(taskSelect, session.taskId, `${session.taskTitle || '削除済みタスク'}（削除済み）`);
+    appendOption(taskSelect, session.taskId, `${session.taskTitle || 'Deleted task'} (deleted)`);
   }
   taskSelect.value = session.taskId || '';
   setRecordTarget(session.targetId);
@@ -1068,7 +1074,7 @@ function saveRecord(event) {
       !Number.isFinite(workMs) || workMs <= 0 ||
       (startedAt != null && startedAt >= endedAt) ||
       (targetId && !targetLabel(groups, targetId))) {
-    $('record-error').textContent = '日時と作業時間を確認してください。';
+    $('record-error').textContent = 'Check the dates and work duration.';
     return;
   }
   const taskId = $('record-task').value || null;
@@ -1079,28 +1085,28 @@ function saveRecord(event) {
   persist();
   closeRecordEditor();
   renderGrowth();
-  $('growth-status').textContent = '記録を修正しました。';
+  $('growth-status').textContent = 'Record updated.';
 }
 
 function deleteRecord(group) {
   const session = sessions.find((item) => item.id === editingRecordId);
   if (!session) return;
   const targets = group ? sessions.filter((item) => item.recordGroupId === session.recordGroupId) : [session];
-  if (!confirm(`${targets.length}件の記録を削除しますか？`)) return;
+  if (!confirm(`Delete ${targets.length} records?`)) return;
   const removed = new Set(targets.map((item) => item.id));
   sessions = sessions.filter((item) => !removed.has(item.id));
   recalculateTotal();
   persist();
   closeRecordEditor();
   renderGrowth();
-  $('growth-status').textContent = `${targets.length}件の記録を削除しました。`;
+  $('growth-status').textContent = `Deleted ${targets.length} records.`;
 }
 
 function validateSound(raw) {
   if (raw == null) return { ...DEFAULT_SOUND };
   if (!Number.isInteger(raw.volume) || raw.volume < 0 || raw.volume > 500 ||
       !Number.isInteger(raw.pitch) || raw.pitch < -12 || raw.pitch > 12) {
-    throw new Error('音の設定が不正です。');
+    throw new Error('Invalid sound settings.');
   }
   return { volume: raw.volume, pitch: raw.pitch };
 }
@@ -1108,7 +1114,7 @@ function validateSound(raw) {
 function validateDayStart(value) {
   if (value === undefined) return DEFAULT_DAY_START;
   if (!Number.isInteger(value) || value < 0 || value >= 24 * 60) {
-    throw new Error('1日の区切りの設定が不正です。');
+    throw new Error('Invalid day boundary setting.');
   }
   return value;
 }
@@ -1117,23 +1123,23 @@ function validateBackup(raw) {
   if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== 1 ||
       !Array.isArray(raw.steps) || !Array.isArray(raw.tasks) ||
       !Array.isArray(raw.groups) || !Array.isArray(raw.sessions)) {
-    throw new Error('このbeta版のバックアップ形式ではありません。');
+    throw new Error('This is not a supported Practice timer beta backup.');
   }
   const restoredSteps = raw.steps.length ? normalizeSteps(raw.steps) : [];
   const ids = new Set();
   const takeId = (value) => {
-    if (typeof value !== 'string' || !value || ids.has(value)) throw new Error('IDが重複または不正です。');
+    if (typeof value !== 'string' || !value || ids.has(value)) throw new Error('Invalid or duplicate ID.');
     ids.add(value);
     return value;
   };
   const title = (value, max) => {
-    if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error('名前が不正です。');
+    if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error('Invalid name.');
     return value.trim();
   };
   const restoredGroups = raw.groups.map((group) => ({
     id: takeId(group.id), title: title(group.title, 60),
     children: (() => {
-      if (!Array.isArray(group.children)) throw new Error('サブテーマが不正です。');
+      if (!Array.isArray(group.children)) throw new Error('Invalid subtheme.');
       return group.children.map((child) => ({ id: takeId(child.id), title: title(child.title, 60) }));
     })(),
   }));
@@ -1141,7 +1147,7 @@ function validateBackup(raw) {
   const restoredTasks = raw.tasks.map((task) => {
     if (typeof task.firstStep !== 'string' || task.firstStep.length > 500 || !validTarget(task.targetId) ||
         (task.completedAt != null && (!Number.isFinite(task.completedAt) || task.completedAt < 0))) {
-      throw new Error('タスクが不正です。');
+      throw new Error('Invalid task.');
     }
     return { id: takeId(task.id), title: title(task.title, 100),
       firstStep: task.firstStep, targetId: task.targetId || null, completedAt: task.completedAt ?? null };
@@ -1157,7 +1163,7 @@ function validateBackup(raw) {
         (session.taskTitle != null && typeof session.taskTitle !== 'string') ||
         (session.recordGroupId != null &&
           (typeof session.recordGroupId !== 'string' || !session.recordGroupId))) {
-      throw new Error('計測記録が不正です。');
+      throw new Error('Invalid record.');
     }
     const id = takeId(session.id);
     return { id, recordGroupId: session.recordGroupId || id,
@@ -1166,12 +1172,12 @@ function validateBackup(raw) {
       targetId: session.targetId || null };
   });
   const restoredRun = raw.run == null ? null : restoreRun(raw.run);
-  if (raw.run != null && !restoredRun) throw new Error('計測途中のデータが不正です。');
+  if (raw.run != null && !restoredRun) throw new Error('Invalid active session.');
   const restoredTotal = raw.totalWorkMs;
   const recorded = restoredSessions.reduce((sum, session) => sum + session.workMs, 0) + (restoredRun?.sessionWorkMs || 0);
   if (!Number.isFinite(restoredTotal) || restoredTotal < 0 || restoredTotal + 1 < recorded ||
       (restoredRun && Math.abs(restoredRun.totalWorkMs - restoredTotal) > 1)) {
-    throw new Error('累計時間が不正です。');
+    throw new Error('Invalid total duration.');
   }
   const restoredSelection = restoredTasks.some((task) => task.id === raw.selectedTaskId &&
     (restoredRun || task.completedAt == null))
@@ -1199,7 +1205,7 @@ function showSettings() {
   settingsDraftActive = true;
   $('settings-error').textContent = '';
   $('permission-status').textContent = 'Notification' in window
-    ? `通知の許可状態：${Notification.permission}` : 'この環境では通知を利用できません。';
+    ? `Notification permission: ${Notification.permission}` : 'Notifications are not available in this browser.';
   renderSettings();
   renderSoundSettings();
   renderDayStart();
@@ -1218,7 +1224,7 @@ function renderDayStart() {
 $('day-start').addEventListener('change', () => {
   const value = $('day-start').value;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
-    $('day-start-error').textContent = '1日の区切りを設定してください。';
+    $('day-start-error').textContent = 'Choose a day boundary time.';
     renderDayStart();
     return;
   }
@@ -1230,7 +1236,7 @@ $('day-start').addEventListener('change', () => {
   selectedThemeDay.setHours(hours, minutes, 0, 0);
   themePeriodAnchor = selectedThemeDay.getTime();
   dayStartMinutes = hours * 60 + minutes;
-  $('day-start-error').textContent = persist() ? '' : '1日の区切りを保存できませんでした。';
+  $('day-start-error').textContent = persist() ? '' : 'Could not save the day boundary.';
   renderGrowth();
 });
 
@@ -1271,12 +1277,12 @@ function renderSoundSettings() {
   const displayedVolume = soundSettings.volume / SOUND_VOLUME_SCALE;
   $('sound-volume').value = String(displayedVolume);
   $('sound-pitch').value = String(soundSettings.pitch);
-  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0%（消音）' : `${displayedVolume}%`;
-  $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? '標準'
-    : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)}半音`;
+  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0% (muted)' : `${displayedVolume}%`;
+  $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? 'Default'
+    : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)} semitones`;
   $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
-  $('sound-pitch').setAttribute('aria-valuetext', soundSettings.pitch === 0 ? '標準'
-    : `標準より${Math.abs(soundSettings.pitch)}半音${soundSettings.pitch > 0 ? '高い' : '低い'}`);
+  $('sound-pitch').setAttribute('aria-valuetext', soundSettings.pitch === 0 ? 'Default'
+    : `${Math.abs(soundSettings.pitch)} semitones ${soundSettings.pitch > 0 ? 'higher' : 'lower'} than default`);
   $('preview-work').disabled = $('preview-rest').disabled = previewPlaying || soundSettings.volume === 0;
 }
 
@@ -1286,10 +1292,10 @@ function updateSoundSettings(id, save = false) {
       : { pitch: Number($('sound-pitch').value) }),
   });
   renderSoundSettings();
-  if (save) $('sound-status').textContent = persist() ? '' : '音の設定を保存できませんでした。';
+  if (save) $('sound-status').textContent = persist() ? '' : 'Could not save sound settings.';
   if (save && run && soundSettings.volume) {
     void prepareAudio().then((ready) => {
-      if (!ready && !$('sound-status').textContent) $('sound-status').textContent = '音を再生できませんでした。';
+      if (!ready && !$('sound-status').textContent) $('sound-status').textContent = 'Could not play sound.';
     });
   }
 }
@@ -1300,32 +1306,32 @@ async function previewSound(phase) {
   $('sound-status').textContent = '';
   renderSoundSettings();
   try {
-    if (!await prepareAudio()) throw new Error('音を再生できませんでした。');
+    if (!await prepareAudio()) throw new Error('Could not play sound.');
     const duration = playSound(phase);
     setTimeout(() => { previewPlaying = false; renderSoundSettings(); }, Math.ceil(duration * 1000) + 50);
   } catch {
     previewPlaying = false;
     renderSoundSettings();
-    $('sound-status').textContent = '音を再生できませんでした。';
+    $('sound-status').textContent = 'Could not play sound.';
   }
 }
 
 function notifyPhase(phase) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    new Notification(phase === 'work' ? '作業を開始' : '休憩を開始', {
-      body: `${run.steps[run.row].minutes}分です。`,
+    new Notification(phase === 'work' ? 'Work started' : 'Break started', {
+      body: `${run.steps[run.row].minutes} minutes.`,
       silent: true,
     });
   } catch {
-    $('status').textContent = '通知を表示できませんでした。';
+    $('status').textContent = 'Could not show a notification.';
   }
 }
 
 function handleEvent(event) {
   if (!event) return;
   if (event.kind === 'interrupted') {
-    $('status').textContent = '長時間の中断を検出したため一時停止しました。';
+    $('status').textContent = 'Paused after a long interruption.';
   } else {
     playSound(event.phase);
     notifyPhase(event.phase);
@@ -1406,7 +1412,7 @@ $('task-undo').addEventListener('click', () => {
     renderTaskChoice();
     document.getElementById(`task-title-${task.id}`)?.focus({ preventScroll: true });
   });
-  $('task-status').textContent = 'タスクを未完了に戻しました。';
+  $('task-status').textContent = 'Task marked as unfinished.';
 });
 $('task-group').addEventListener('change', () => renderTaskChildren());
 $('quick-task-form').addEventListener('submit', (event) => {
@@ -1430,7 +1436,7 @@ $('group-form').addEventListener('submit', (event) => {
   $('group-form').reset();
   persist();
   renderGrowth();
-  $('growth-status').textContent = 'テーマを追加しました。';
+  $('growth-status').textContent = 'Theme added.';
 });
 for (const kind of ['day', 'week', 'month', 'year']) {
   $('period-' + kind).addEventListener('click', () => {
@@ -1478,7 +1484,7 @@ $('save-settings').addEventListener('click', () => {
   try {
     steps = normalizeSteps(draft);
     settingsDraftActive = false;
-    if (run) $('status').textContent = '設定変更は次の開始から反映します。';
+    if (run) $('status').textContent = 'Changes apply to the next session.';
     persist();
     showTimer();
   } catch (error) {
@@ -1498,7 +1504,7 @@ $('main-action').addEventListener('click', () => {
     audioReady.then((ready) => {
       if (run !== startedRun || run.status !== 'running' || run.row !== 0 || run.looping) return;
       if (ready) playSound(startedRun.phase);
-      else if (!$('status').textContent) $('status').textContent = '音を準備できませんでした。タイマーは続行中です。';
+      else if (!$('status').textContent) $('status').textContent = 'Sound is unavailable. The timer is still running.';
     });
   } else if (run.status === 'running') {
     handleEvent(pauseRun(run, Date.now()));
@@ -1535,7 +1541,7 @@ $('end').addEventListener('click', () => {
   }
   run = null;
   selectedTaskId = null;
-  $('status').textContent = `記録 ${durationText(gainedMs)}`;
+  $('status').textContent = `Logged ${durationText(gainedMs)}`;
   persist();
   renderTimer();
   renderTaskChoice();
@@ -1544,14 +1550,14 @@ $('end').addEventListener('click', () => {
 
 $('permission').addEventListener('click', async () => {
   if (!('Notification' in window)) {
-    $('permission-status').textContent = 'この環境では通知を利用できません。';
+    $('permission-status').textContent = 'Notifications are not available in this browser.';
     return;
   }
   try {
     const permission = await Notification.requestPermission();
-    $('permission-status').textContent = permission === 'granted' ? '通知を許可しました。' : '通知は許可されていません。';
+    $('permission-status').textContent = permission === 'granted' ? 'Notifications enabled.' : 'Notifications are not enabled.';
   } catch {
-    $('permission-status').textContent = '通知の許可を確認できませんでした。';
+    $('permission-status').textContent = 'Could not check notification permission.';
   }
 });
 
@@ -1565,7 +1571,7 @@ $('export-data').addEventListener('click', () => {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  $('backup-status').textContent = 'JSONを保存しました。';
+  $('backup-status').textContent = 'JSON downloaded.';
 });
 
 $('import-file').addEventListener('change', async () => {
@@ -1573,10 +1579,10 @@ $('import-file').addEventListener('change', async () => {
   const file = input.files?.[0];
   if (!file) return;
   try {
-    if (run) throw new Error('計測中は読み込めません。終了してから読み込んでください。');
-    if (file.size > 5_000_000) throw new Error('5MBを超えるJSONは読み込めません。');
+    if (run) throw new Error('End the current session before importing.');
+    if (file.size > 5_000_000) throw new Error('JSON files must be 5 MB or smaller.');
     const next = validateBackup(JSON.parse(await file.text()));
-    if (!confirm('現在のデータをJSONの内容で置き換えますか？')) return;
+    if (!confirm('Replace all current data with this JSON backup?')) return;
     ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
     localDataReadable = true;
     settingsDraftActive = false;
@@ -1589,10 +1595,10 @@ $('import-file').addEventListener('change', async () => {
     renderTaskChoice();
     renderSoundSettings();
     renderDayStart();
-    $('backup-status').textContent = 'JSONを読み込みました。';
+    $('backup-status').textContent = 'JSON imported.';
     if (!steps.length) showSettings();
   } catch (error) {
-    $('backup-status').textContent = `読み込みを中止しました：${error.message}`;
+    $('backup-status').textContent = `Import cancelled: ${error.message}`;
   } finally {
     input.value = '';
   }

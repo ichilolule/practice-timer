@@ -5,18 +5,18 @@ const MAX_MINUTES = 240;
 const LATE_LIMIT_MS = 90_000;
 
 function normalizeSteps(rows) {
-  if (!Array.isArray(rows) || !rows.length) throw new Error('手順を1件以上追加してください。');
+  if (!Array.isArray(rows) || !rows.length) throw new Error('Add at least one timer step.');
   const steps = rows.map((row, index) => {
     const minutes = Number(row.minutes);
     if (!['work', 'rest'].includes(row.type) || !Number.isFinite(minutes) ||
         minutes < 0.1 || minutes > MAX_MINUTES ||
         Math.abs(minutes * 10 - Math.round(minutes * 10)) > 0.000001) {
-      throw new Error(`${index + 1}行目の種類と時間（0.1〜240分）を入力してください。`);
+      throw new Error(`Enter a type and duration (0.1–240 minutes) for step ${index + 1}.`);
     }
     return { type: row.type, minutes: Math.round(minutes * 10) / 10 };
   });
   if (!steps.some((step) => step.type === 'work') || !steps.some((step) => step.type === 'rest')) {
-    throw new Error('作業と休憩をそれぞれ1件以上追加してください。');
+    throw new Error('Add at least one work step and one break step.');
   }
   return steps;
 }

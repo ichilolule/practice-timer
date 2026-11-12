@@ -133,9 +133,9 @@ test('自動保存へタスク・設定変更を伝え、計測途中のJSONも�
   assert.equal(automatic.run.sessionWorkMs, 3500);
   assert.equal(automatic.totalWorkMs, 3500);
   assert.equal(automatic.run.lastTick, null);
-  assert.equal(app.elements.get('main-action').getAttribute('aria-label'), '一時停止');
+  assert.equal(app.elements.get('main-action').getAttribute('aria-label'), 'Pause');
   const restored = mount(new Map([['practice-timer-v1', JSON.stringify(automatic)]]));
-  assert.equal(restored.elements.get('main-action').getAttribute('aria-label'), '再開');
+  assert.equal(restored.elements.get('main-action').getAttribute('aria-label'), 'Resume');
   await app.elements.get('end').trigger('click');
   assert.equal(changes.at(-1).run, null);
   assert.equal(changes.at(-1).sessions[0].workMs, 3500);
@@ -184,7 +184,7 @@ test('ローカルデータが壊れている間は直接保存を止め、有�
   app.elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(recovered) }];
   await app.elements.get('import-file').trigger('change');
   assert.equal(options.canWrite(), true);
-  assert.match(app.elements.get('backup-status').textContent, /読み込みました/);
+  assert.match(app.elements.get('backup-status').textContent, /JSON imported/);
 });
 
 test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で試聴できる', async () => {
@@ -234,15 +234,15 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   await elements.get('import-file').trigger('change');
   assert.equal(elements.get('sound-volume').value, '7');
   assert.equal(elements.get('sound-pitch').value, '-12');
-  assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '標準より12半音低い');
+  assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '12 semitones lower than default');
   const beforeInvalid = app.storage.get('practice-timer-v1');
   backup.sound.pitch = 99;
   await elements.get('import-file').trigger('change');
-  assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
+  assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
   assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
   backup.sound = { volume: 501, pitch: 0 };
   await elements.get('import-file').trigger('change');
-  assert.match(elements.get('backup-status').textContent, /音の設定が不正/);
+  assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
   assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
 });
 
@@ -256,12 +256,12 @@ test('音量0は完全に消音し、音を準備できない環境でも計測�
   elements.get('sound-volume').value = '0';
   await elements.get('sound-volume').trigger('change');
   assert.equal(elements.get('preview-work').disabled, true);
-  assert.equal(elements.get('sound-volume-value').textContent, '0%（消音）');
+  assert.equal(elements.get('sound-volume-value').textContent, '0% (muted)');
   await elements.get('nav-timer').trigger('click');
   await elements.get('main-action').trigger('click');
   await elements.get('skip').trigger('click');
   assert.equal(elements.get('status').textContent, '');
-  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Break · running');
   const audio = recordAudio();
   const muted = mount(storage, audio.AudioContext);
   await muted.elements.get('settings-toggle').trigger('click');
@@ -284,7 +284,7 @@ test('音の設定を含まない旧バックアップは標準音を使い、�
   assert.equal(elements.get('sound-volume').value, '20');
   assert.equal(elements.get('sound-pitch').value, '0');
   await elements.get('preview-rest').trigger('click');
-  assert.match(elements.get('sound-status').textContent, /音を再生できません/);
+  assert.match(elements.get('sound-status').textContent, /Could not play sound/);
   assert.equal(elements.get('preview-rest').disabled, false);
 });
 
@@ -345,15 +345,15 @@ test('通常の開始説明を省き、音の失敗は工程移行後も残し�
   const starting = elements.get('main-action').trigger('click');
   assert.equal(elements.get('status').textContent, '');
   await starting;
-  assert.match(elements.get('status').textContent, /音を準備できません/);
+  assert.match(elements.get('status').textContent, /Sound is unavailable/);
   await elements.get('skip').trigger('click');
-  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
-  assert.match(elements.get('status').textContent, /音を準備できません/);
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Break · running');
+  assert.match(elements.get('status').textContent, /Sound is unavailable/);
   const restored = mount(storage).elements;
   assert.equal(restored.get('status').textContent, '');
-  assert.equal(restored.get('phase-name').getAttribute('aria-label'), '休憩・一時停止中');
+  assert.equal(restored.get('phase-name').getAttribute('aria-label'), 'Break · paused');
   assert.equal(restored.get('phase-paused').hidden, false);
-  assert.equal(restored.get('main-action').getAttribute('aria-label'), '再開');
+  assert.equal(restored.get('main-action').getAttribute('aria-label'), 'Resume');
 });
 
 test('保存失敗は音の失敗で上書きしない', async () => {
@@ -363,7 +363,7 @@ test('保存失敗は音の失敗で上書きしない', async () => {
   };
   const { elements } = mount(storage);
   await elements.get('main-action').trigger('click');
-  assert.match(elements.get('status').textContent, /ブラウザに保存できません/);
+  assert.match(elements.get('status').textContent, /Could not save in this browser/);
 });
 
 test('HTMLを直接開く構成で追加・保存・開始・次へが動く', async () => {
@@ -378,7 +378,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   const { elements, storage } = mount();
 
   assert.equal(elements.get('timer-view').hidden, false);
-  assert.equal(elements.get('main-action').getAttribute('aria-label'), '手順を設定');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), 'Set up timer');
   assert.equal(elements.get('skip').hidden, true);
   assert.equal(elements.get('end').hidden, true);
   await elements.get('main-action').trigger('click');
@@ -407,25 +407,25 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   assert.equal(elements.get('main-action').disabled, false);
   assert.equal(elements.get('clock').textContent, '00:06');
   const startClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '作業中');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Work · running');
   assert.equal(elements.get('phase-icon').getAttribute('href'), '#icon-work');
-  assert.equal(elements.get('main-action').getAttribute('aria-label'), '一時停止');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), 'Pause');
   assert.equal(elements.get('main-action-icon').getAttribute('href'), '#icon-pause');
   assert.equal(elements.get('skip').hidden, false);
-  assert.equal(elements.get('skip').getAttribute('aria-label'), '休憩へ進む');
+  assert.equal(elements.get('skip').getAttribute('aria-label'), 'Skip to break');
   assert.equal(elements.get('phase-paused').hidden, true);
   const pauseClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('main-action').getAttribute('aria-label'), '再開');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), 'Resume');
   assert.equal(elements.get('main-action-icon').getAttribute('href'), '#icon-play');
-  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '作業・一時停止中');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Work · paused');
   assert.equal(elements.get('phase-paused').hidden, false);
   const resumeClick = elements.get('main-action').trigger('click');
-  assert.equal(elements.get('main-action').getAttribute('aria-label'), '一時停止');
+  assert.equal(elements.get('main-action').getAttribute('aria-label'), 'Pause');
   await Promise.all([startClick, pauseClick, resumeClick]);
   await elements.get('skip').trigger('click');
-  assert.equal(elements.get('phase-name').getAttribute('aria-label'), '休憩中');
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Break · running');
   assert.equal(elements.get('phase-icon').getAttribute('href'), '#icon-rest');
-  assert.equal(elements.get('skip').getAttribute('aria-label'), '次の作業へ');
+  assert.equal(elements.get('skip').getAttribute('aria-label'), 'Next work phase');
   assert.ok(storage.has('practice-timer-v1'));
 });
 
@@ -494,12 +494,12 @@ test('タスクの後選択、日別記録の割り当て、文字JSONの保存�
   assert.equal(JSON.stringify(backup).includes('data:image'), false);
   elements.get('import-file').files = [{ size: app.exportedBlob.size, text: () => app.exportedBlob.text() }];
   await elements.get('import-file').trigger('change');
-  assert.match(elements.get('backup-status').textContent, /読み込みました/);
+  assert.match(elements.get('backup-status').textContent, /JSON imported/);
   assert.equal(elements.get('status').textContent, '');
   const beforeInvalidImport = storage.get('practice-timer-v1');
   elements.get('import-file').files = [{ size: 20, text: async () => '{"format":"wrong"}' }];
   await elements.get('import-file').trigger('change');
-  assert.match(elements.get('backup-status').textContent, /中止しました/);
+  assert.match(elements.get('backup-status').textContent, /Import cancelled/);
   assert.equal(storage.get('practice-timer-v1'), beforeInvalidImport);
 });
 
@@ -652,13 +652,13 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   elements.get('timer-quick-task-title').value = '単語を覚える';
   await elements.get('timer-quick-task-form').trigger('submit');
   await elements.get('nav-tasks').trigger('click');
-  await buttonNamed(elements.get('task-list').children[0], '編集').trigger('click');
+  await buttonNamed(elements.get('task-list').children[0], 'Edit').trigger('click');
   elements.get('task-first-step').value = '復習も含む\n例文を声に出す';
   elements.get('task-group').value = group.id;
   await elements.get('task-group').trigger('change');
   await elements.get('task-form').trigger('submit');
   assert.equal(elements.get('task-list').children[0].children[1].children[1].children[0].textContent,
-    'メモ：復習も含む\n例文を声に出す');
+    'Notes: 復習も含む\n例文を声に出す');
   await elements.get('nav-timer').trigger('click');
   assert.equal(elements.get('active-task-name').textContent, '単語を覚える');
   assert.equal(elements.get('active-task-hint').textContent, '復習も含む\n例文を声に出す');
@@ -666,8 +666,8 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   assert.equal(elements.get('active-task-panel').hidden, true);
   await elements.get('nav-tasks').trigger('click');
   const selectedRow = elements.get('task-list').children[0];
-  assert.equal(buttonNamed(selectedRow, '削除').disabled, true);
-  assert.equal(buttonNamed(selectedRow, 'このタスクを選ぶ'), null);
+  assert.equal(buttonNamed(selectedRow, 'Delete').disabled, true);
+  assert.equal(buttonNamed(selectedRow, 'Use this task'), null);
   selectedRow.querySelector('input').checked = true;
   await selectedRow.querySelector('input').trigger('change');
   await elements.get('nav-timer').trigger('click');
@@ -781,7 +781,7 @@ test('タイトル中心の詳細からタスクを選び、入力中のタイ�
   assert.equal(row.querySelector('summary').textContent, '構図を考える');
   assert.equal(row.children[1].tagName, 'details');
   assert.equal(row.children[1].open, false);
-  await buttonNamed(row, 'このタスクを選ぶ').trigger('click');
+  await buttonNamed(row, 'Use this task').trigger('click');
   assert.equal(elements.get('timer-view').hidden, false);
   assert.equal(elements.get('active-task-name').textContent, '構図を考える');
   assert.equal(elements.get('active-task-hint').textContent, 'ラフを3案描く');
@@ -934,7 +934,7 @@ test('作業時間をh・m表記に統一し、秒の精度と開始・終了時
   const { elements, storage } = mount(new Map([['practice-timer-v1', original]]), undefined, +start);
   await elements.get('nav-growth').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '1h 00m');
-  assert.equal(elements.get('growth-all-total').textContent, '全期間 126h 30m');
+  assert.equal(elements.get('growth-all-total').textContent, 'All time 126h 30m');
   await elements.get('nav-themes').trigger('click');
   await elements.get('theme-period-day').trigger('click');
   const group = elements.get('group-list').children[0];
@@ -942,21 +942,21 @@ test('作業時間をh・m表記に統一し、秒の精度と開始・終了時
   const child = group.querySelector('tbody').children[0];
   assert.equal(child.children[0].textContent, '手');
   assert.equal(child.children[2].textContent, '0h 25m');
-  assert.equal(group.children[1].children[1].textContent, 'サブテーマなし 0h 34m');
+  assert.equal(group.children[1].children[1].textContent, 'No subtheme 0h 34m');
   await elements.get('nav-growth').trigger('click');
   const records = elements.get('record-list').children;
   assert.deepEqual(records[0].children[0].children.map((item) => item.textContent), ['手を描く', '0h 25m']);
-  assert.equal(records[0].children[1].children[0].textContent, '10:00 ～ 10:25');
+  assert.equal(records[0].children[1].children[0].textContent, '10:00 – 10:25');
   assert.equal(records[0].children[1].children.length, 1);
   const edit = records[0].children[2];
   assert.equal(edit.textContent, '');
-  assert.equal(edit.getAttribute('aria-label'), '手を描くの記録を修正または削除');
+  assert.equal(edit.getAttribute('aria-label'), 'Edit or delete record: 手を描く');
   assert.equal(edit.children[0].children[0].getAttribute('href'), '#icon-work');
   assert.equal(records[2].children[0].children[1].textContent, '0h 00m');
   await elements.get('period-next').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '125h 30m');
   const legacy = elements.get('record-list').children[0];
-  assert.equal(legacy.children[1].children[0].textContent, '開始時刻なし ～ 10:00');
+  assert.equal(legacy.children[1].children[0].textContent, 'No start time – 10:00');
   assert.equal(storage.get('practice-timer-v1'), original);
 });
 
@@ -994,7 +994,7 @@ test('テーマの横棒は共通目盛りで0時間も示し、サブテーマ�
   assert.equal(colorBar.children[1].children[0].style.width, '5.5%');
   assert.equal(compositionBar.children[0].children[1].textContent, '0h 00m');
   assert.equal(compositionBar.children[1].children[0].style.width, '0%');
-  assert.equal(cards[1].children[1].children[0].children[1].textContent, '目安 3h 00m');
+  assert.equal(cards[1].children[1].children[0].children[1].textContent, 'Reference 3h 00m');
   const subRows = cards[1].querySelector('tbody').children;
   assert.deepEqual(subRows.map((row) => row.children[2].textContent), ['2h 30m', '3h 00m', '0h 00m']);
   assert.equal(subRows[0].children[1].children[0].children[0].style.width, `${2.5 / 3 * 100}%`);
@@ -1005,7 +1005,7 @@ test('テーマの横棒は共通目盛りで0時間も示し、サブテーマ�
   await elements.get('theme-period-day').trigger('click');
   const todayColor = elements.get('group-list').children[1];
   assert.equal(todayColor.open, true);
-  assert.equal(todayColor.children[1].children[0].children[1].textContent, '目安 2h 30m');
+  assert.equal(todayColor.children[1].children[0].children[1].textContent, 'Reference 2h 30m');
   assert.deepEqual(todayColor.querySelector('tbody').children.map((row) => row.children[2].textContent),
     ['2h 30m', '0h 00m', '0h 00m']);
   await elements.get('theme-period-prev').trigger('click');
@@ -1029,18 +1029,18 @@ test('テーマとサブテーマの名前はアプリ内で変更でき、記�
       : node.children.map(visit).find(Boolean);
     return visit(card);
   };
-  await findRename(elements.get('group-list').children[0], '人体の名前を変更').trigger('click');
+  await findRename(elements.get('group-list').children[0], 'Rename 人体').trigger('click');
   assert.equal(elements.get('theme-name-dialog').open, true);
-  assert.equal(elements.get('theme-name-title').textContent, 'テーマの名前');
+  assert.equal(elements.get('theme-name-title').textContent, 'Theme name');
   elements.get('theme-name').value = '  ';
   await elements.get('theme-name-form').trigger('submit');
-  assert.match(elements.get('theme-name-error').textContent, /1〜60文字/);
+  assert.match(elements.get('theme-name-error').textContent, /1 and 60 characters/);
   assert.equal(storage.get('practice-timer-v1'), original);
   elements.get('theme-name').value = '人体練習';
   await elements.get('theme-name-form').trigger('submit');
   assert.equal(elements.get('theme-name-dialog').open, false);
-  await findRename(elements.get('group-list').children[0], '手の名前を変更').trigger('click');
-  assert.equal(elements.get('theme-name-title').textContent, 'サブテーマの名前');
+  await findRename(elements.get('group-list').children[0], 'Rename 手').trigger('click');
+  assert.equal(elements.get('theme-name-title').textContent, 'Subtheme name');
   elements.get('theme-name').value = '手の形';
   await elements.get('theme-name-form').trigger('submit');
   const saved = JSON.parse(storage.get('practice-timer-v1'));
@@ -1067,19 +1067,19 @@ test('名前横のペンから削除でき、確認の取り消しと記録・�
   await elements.get('nav-themes').trigger('click');
   let card = elements.get('group-list').children[0];
   let prevented = false, stopped = false;
-  await find(card.children[0], '人体の名前を変更').trigger('click', {
+  await find(card.children[0], 'Rename 人体').trigger('click', {
     preventDefault() { prevented = true; }, stopPropagation() { stopped = true; },
   });
   assert.equal(prevented, true);
   assert.equal(stopped, true);
-  assert.equal(elements.get('theme-name-delete').textContent, 'テーマを削除');
+  assert.equal(elements.get('theme-name-delete').textContent, 'Delete theme');
   await elements.get('theme-name-delete').trigger('click');
   assert.equal(elements.get('theme-name-dialog').open, true);
   assert.equal(storage.get('practice-timer-v1'), original);
   await elements.get('theme-name-cancel').trigger('click');
   const childCell = card.querySelector('tbody').children[0].children[0];
-  await find(childCell, '手の名前を変更').trigger('click');
-  assert.equal(elements.get('theme-name-delete').textContent, 'サブテーマを削除');
+  await find(childCell, 'Rename 手').trigger('click');
+  assert.equal(elements.get('theme-name-delete').textContent, 'Delete subtheme');
   elements.get('theme-name').value = '';
   accept = true;
   await elements.get('theme-name-delete').trigger('click');
@@ -1091,7 +1091,7 @@ test('名前横のペンから削除でき、確認の取り消しと記録・�
   assert.equal(saved.sessions[1].targetId, 'body');
   assert.equal(saved.totalWorkMs, 900_000);
   card = elements.get('group-list').children[0];
-  await find(card.children[0], '人体の名前を変更').trigger('click');
+  await find(card.children[0], 'Rename 人体').trigger('click');
   await elements.get('theme-name-delete').trigger('click');
   saved = JSON.parse(storage.get('practice-timer-v1'));
   assert.equal(saved.groups.length, 0);
@@ -1113,12 +1113,12 @@ test('日付をまたぐ記録は選択日以外の日付と当日分の時間�
   await elements.get('nav-growth').trigger('click');
   let row = elements.get('record-list').children[0];
   assert.equal(row.children[0].children[1].textContent, '0h 30m');
-  assert.equal(row.children[0].children[1].children[0].textContent, 'この日');
-  assert.equal(row.children[1].children[0].textContent, '23:30 ～ 1/2 01:00');
+  assert.equal(row.children[0].children[1].children[0].textContent, 'This day');
+  assert.equal(row.children[1].children[0].textContent, '23:30 – 1/2 01:00');
   await elements.get('period-next').trigger('click');
   row = elements.get('record-list').children[0];
   assert.equal(row.children[0].children[1].textContent, '1h 00m');
-  assert.equal(row.children[1].children[0].textContent, '1/1 23:30 ～ 01:00');
+  assert.equal(row.children[1].children[0].textContent, '1/1 23:30 – 01:00');
   await row.children.at(-1).trigger('click');
   assert.equal(elements.get('record-dialog').open, true);
   assert.equal(new Date(elements.get('record-start').value).getTime(), +start);
@@ -1144,13 +1144,13 @@ test('日のグラフは初期5時から24区間で表示し、区切りの変�
   assert.equal(elements.get('growth-total').textContent, '0h 40m');
   const bars = elements.get('period-chart').children;
   assert.equal(bars.length, 24);
-  assert.equal(bars[0].getAttribute('aria-label'), '05:00 ～ 06:00 0h 00m');
-  assert.equal(bars[23].getAttribute('aria-label'), '04:00 ～ 05:00 0h 10m');
+  assert.equal(bars[0].getAttribute('aria-label'), '05:00 – 06:00 0h 00m');
+  assert.equal(bars[23].getAttribute('aria-label'), '04:00 – 05:00 0h 10m');
   assert.equal(elements.get('period-chart-max').textContent, '1h 00m');
   assert.equal(elements.get('day-untimed').hidden, false);
-  assert.equal(elements.get('day-untimed').textContent, '開始時刻なし 0h 10m');
+  assert.equal(elements.get('day-untimed').textContent, 'No start time 0h 10m');
   await elements.get('period-week').trigger('click');
-  assert.equal(elements.get('period-label').textContent, '2026/11/9 ～ 2026/11/15');
+  assert.equal(elements.get('period-label').textContent, '2026/11/9 – 2026/11/15');
   await elements.get('period-day').trigger('click');
   await elements.get('period-next').trigger('click');
   assert.equal(elements.get('growth-total').textContent, '0h 10m');
@@ -1167,14 +1167,14 @@ test('日のグラフは初期5時から24区間で表示し、区切りの変�
   elements.get('day-start').value = '23:30';
   await elements.get('day-start').trigger('change');
   await elements.get('nav-growth').trigger('click');
-  assert.equal(elements.get('period-chart').children[0].getAttribute('aria-label'), '23:30 ～ 00:30 0h 20m');
+  assert.equal(elements.get('period-chart').children[0].getAttribute('aria-label'), '23:30 – 00:30 0h 20m');
   await elements.get('period-next').trigger('click');
   assert.match(elements.get('period-label').textContent, /2026\/11\/12/);
   await elements.get('period-prev').trigger('click');
   assert.match(elements.get('period-label').textContent, /2026\/11\/11/);
   await elements.get('period-month').trigger('click');
   await elements.get('period-chart').children[0].trigger('click');
-  assert.match(elements.get('period-label').textContent, /2026\/11\/1\(/);
+  assert.match(elements.get('period-label').textContent, /2026\/11\/1 \(Sun\)/);
   assert.equal(elements.get('period-chart').children.length, 24);
   await elements.get('settings-toggle').trigger('click');
   await elements.get('export-data').trigger('click');
@@ -1190,7 +1190,7 @@ test('日のグラフは初期5時から24区間で表示し、区切りの変�
     const before = storage.get('practice-timer-v1');
     backup.dayStartMinutes = invalid;
     await elements.get('import-file').trigger('change');
-    assert.match(elements.get('backup-status').textContent, /区切りの設定が不正/);
+    assert.match(elements.get('backup-status').textContent, /Invalid day boundary setting/);
     assert.equal(storage.get('practice-timer-v1'), before);
   }
   delete backup.dayStartMinutes;
@@ -1254,4 +1254,46 @@ test('繰り返し計測の一件削除と起動分削除で累計を再計算�
   assert.equal(afterAll.totalWorkMs, 0);
   await all.elements.get('period-week').trigger('click');
   assert.equal(all.elements.get('period-chart').hidden, true);
+});
+
+test('円の残り割合とLoggedは一時停止・休憩を除外し、計測中の設定変更でも元の工程に従う', async () => {
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 4 }, { type: 'rest', minutes: 2 }], totalWorkMs: 0,
+  })]]));
+  const { elements } = app;
+  const ring = () => elements.get('timer-ring-remaining').getAttribute('stroke-dasharray');
+  assert.equal(ring(), '100 100');
+  assert.equal(elements.get('timer-logged').textContent, '0h 00m');
+  await elements.get('main-action').trigger('click');
+  app.advance(60_000);
+  await elements.get('main-action').trigger('click');
+  assert.equal(ring(), '75 100');
+  assert.equal(elements.get('timer-logged').textContent, '0h 01m');
+  app.advance(120_000);
+  await elements.get('main-action').trigger('click');
+  assert.equal(ring(), '75 100');
+  assert.equal(elements.get('timer-logged').textContent, '0h 01m');
+  app.advance(60_000);
+  await elements.get('skip').trigger('click');
+  assert.equal(ring(), '100 100');
+  assert.equal(elements.get('phase-icon').getAttribute('href'), '#icon-rest');
+  assert.equal(elements.get('timer-logged').textContent, '0h 02m');
+  app.advance(30_000);
+  await elements.get('main-action').trigger('click');
+  assert.equal(ring(), '75 100');
+  assert.equal(elements.get('timer-logged').textContent, '0h 02m');
+  await elements.get('settings-toggle').trigger('click');
+  for (const row of elements.get('step-list').children) {
+    row.querySelector('input').value = '1';
+    await row.querySelector('input').trigger('input');
+  }
+  await elements.get('save-settings').trigger('click');
+  assert.equal(ring(), '75 100');
+  await elements.get('end').trigger('click');
+  assert.equal(elements.get('clock').textContent, '01:00');
+  assert.equal(ring(), '100 100');
+  assert.equal(elements.get('timer-logged').textContent, '0h 00m');
+  const saved = JSON.parse(app.storage.get('practice-timer-v1'));
+  assert.equal(saved.totalWorkMs, 120_000);
+  assert.equal(saved.sessions.reduce((sum, record) => sum + record.workMs, 0), 120_000);
 });

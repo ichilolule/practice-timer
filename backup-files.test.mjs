@@ -115,7 +115,7 @@ test('複数保存先を同じJSONで更新し、変更が止まって2分後に
   await app.advance(1);
   assert.equal(first.text, second.text);
   assert.equal(JSON.parse(first.text).tasks[0].title, '人体');
-  assert.match(app.status, /2件中2件を保存済み/);
+  assert.match(app.status, /2 of 2 destinations saved/);
 });
 
 test('計測中など変更が続いても5分で保存し、書き込み中の変更も次回へ引き継ぐ', async () => {
@@ -129,7 +129,7 @@ test('計測中など変更が続いても5分で保存し、書き込み中の�
   handle.onWrite = () => { app.edit({ tasks: [{ title: '保存中の編集' }], run: null }); handle.onWrite = null; };
   app.edit({ tasks: [{ title: '保存開始時' }], run: null });
   await app.advance(120_000);
-  assert.match(app.status, /1件中0件/);
+  assert.match(app.status, /0 of 1 destinations saved/);
   await app.advance(120_000);
   assert.equal(JSON.parse(handle.text).tasks[0].title, '保存中の編集');
 });
@@ -142,14 +142,14 @@ test('外部変更を自動上書きせず、その保存先だけ停止し、�
   await app.advance(120_000);
   assert.equal(first.text, '{"external":true}');
   assert.equal(JSON.parse(second.text).tasks[0].title, '色塗り');
-  assert.match(app.cards[0].children[2].textContent, /外部で更新/);
+  assert.match(app.cards[0].children[2].textContent, /changed elsewhere/);
   app.accept = false;
   await app.cards[0].children[3].children[0].trigger();
   assert.equal(first.writes.length, 1);
   app.accept = true;
   await app.cards[0].children[3].children[0].trigger();
   assert.equal(first.text, second.text);
-  assert.match(app.status, /2件中2件/);
+  assert.match(app.status, /2 of 2 destinations saved/);
 });
 
 test('再起動後は保存先を復元し、権限切れでは自動の許可要求をせず手動保存で再許可する', async () => {
@@ -159,7 +159,7 @@ test('再起動後は保存先を復元し、権限切れでは自動の許可�
   assert.equal(restored.cards.length, 1);
   assert.equal(handle.prompts, 0);
   assert.equal(handle.writes.length, 1);
-  assert.match(restored.cards[0].children[2].textContent, /再許可/);
+  assert.match(restored.cards[0].children[2].textContent, /access needs to be renewed/);
   await restored.elements.get('backup-save').trigger();
   assert.equal(handle.prompts, 1);
   assert.deepEqual(JSON.parse(handle.text).tasks, ['new']);
@@ -181,7 +181,7 @@ test('選択キャンセル・重複・既存内容の上書き辞退で登録�
   const app = await mount(); const handle = file(); await app.add(handle);
   const cancel = new Error(); cancel.name = 'AbortError'; await app.add(cancel);
   await app.add(handle);
-  assert.match(app.message, /既に登録/);
+  assert.match(app.message, /already registered/);
   const other = file(); other.text = '{"old":true}'; app.accept = false; await app.add(other);
   assert.equal(app.cards.length, 1);
   assert.equal(other.writes.length, 0);
@@ -191,22 +191,22 @@ test('選択キャンセル・重複・既存内容の上書き辞退で登録�
 test('保存先の記憶に失敗してもJSONを書き出し、保存先の一部失敗でもほかへ保存する', async () => {
   const app = await mount(); const first = file(), second = file();
   await app.add(first); app.db.fail = true; await app.add(second);
-  assert.match(app.status, /設定を記憶できません/);
+  assert.match(app.status, /could not be remembered/);
   assert.equal(second.writes.length, 1);
   first.fail = true;
   app.edit({ tasks: ['次の内容'], run: null }); await app.advance(120_000);
-  assert.match(app.cards[0].children[2].textContent, /保存できません/);
+  assert.match(app.cards[0].children[2].textContent, /Could not save/);
   assert.deepEqual(JSON.parse(second.text).tasks, ['次の内容']);
 });
 
 test('非対応ブラウザと読めないローカルデータでは直接保存を無効にする', async () => {
   const unsupported = await mount({ supported: false });
   assert.equal(unsupported.elements.get('backup-add').disabled, true);
-  assert.match(unsupported.status, /ダウンロード/);
+  assert.match(unsupported.status, /Download/);
   const app = await mount(); const handle = file(); await app.add(handle);
   const unreadable = await mount({ db: app.db, readable: false });
   assert.equal(unreadable.elements.get('backup-save').disabled, true);
-  assert.match(unreadable.status, /保存を停止/);
+  assert.match(unreadable.status, /File saving is paused/);
   assert.equal(handle.writes.length, 1);
 });
 

@@ -52,10 +52,10 @@ function mount({ snapshot, content, canWrite }) {
     if (maxTimer === null) maxTimer = setTimeout(() => writeAll(true), MAX_MS);
   }
   function status(target) {
-    if (target.issue === 'conflict') return '外部で更新されています。自動保存を停止しました。内容を確認して「保存」を押してください。';
-    if (target.issue === 'permission') return 'アクセス再許可が必要です。「保存」を押してください。';
-    if (target.issue === 'error') return '保存できませんでした。保存先を確認して「保存」で再試行してください。';
-    return target.verified === observed ? '現在の内容を保存済みです。' : '更新待ちです。';
+    if (target.issue === 'conflict') return 'This file changed elsewhere. Autosave paused. Review it, then choose Save.';
+    if (target.issue === 'permission') return 'File access needs to be renewed. Choose Save.';
+    if (target.issue === 'error') return 'Could not save. Check the destination and choose Save to try again.';
+    return target.verified === observed ? 'Up to date.' : 'Changes pending.';
   }
   function refresh() {
     $('backup-add').disabled = !supported || !readyDone || busy || !canWrite();
@@ -65,15 +65,15 @@ function mount({ snapshot, content, canWrite }) {
     $('backup-auto').checked = auto;
     const saved = targets.filter(target => !target.issue && target.verified === observed).length;
     $('backup-auto-status').textContent = !supported
-      ? 'このブラウザでは保存先への自動保存を利用できません。JSONをダウンロードしてください。'
-      : !canWrite() ? 'ブラウザの保存データを読めないため、JSONへの保存を停止しています。バックアップを読み込んで復元してください。'
-      : !targets.length ? '保存先を追加すると自動保存できます。'
-      : `${targets.length}件中${saved}件を保存済みです。` + (busy ? ' 保存中です。' : auto ? '' : ' 自動保存はオフです。') +
-        (remembered ? '' : ' 保存先の設定を記憶できません。次回は再設定が必要な場合があります。');
+      ? 'File autosave is not available in this browser. Download a JSON backup instead.'
+      : !canWrite() ? 'File saving is paused because browser data could not be read. Import a backup to restore your data.'
+      : !targets.length ? 'Add a backup destination to enable autosave.'
+      : `${saved} of ${targets.length} destinations saved.` + (busy ? ' Saving…' : auto ? '' : ' Autosave is off.') +
+        (remembered ? '' : ' Backup destinations could not be remembered. You may need to add them again next time.');
     for (const target of targets) {
       const detail = details.get(target.id);
       if (!detail) continue;
-      detail.text.textContent = status(target) + (target.savedAt ? ` 最終保存：${new Date(target.savedAt).toLocaleString('ja-JP')}` : '');
+      detail.text.textContent = status(target) + (target.savedAt ? ` Last saved: ${new Date(target.savedAt).toLocaleString('en-US')}` : '');
       for (const button of detail.buttons) button.disabled = busy || !canWrite();
     }
   }
@@ -87,9 +87,9 @@ function mount({ snapshot, content, canWrite }) {
       const text = document.createElement('p'); text.className = 'subtle';
       const actions = document.createElement('div'); actions.className = 'backup-actions';
       const buttons = [
-        ['保存', () => writeAll(false, [target.id])],
-        ['変更', () => choose(target.id)],
-        ['解除', () => remove(target.id)],
+        ['Save', () => writeAll(false, [target.id])],
+        ['Change', () => choose(target.id)],
+        ['Remove', () => remove(target.id)],
       ].map(([label, action]) => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
         button.addEventListener('click', action); actions.append(button); return button;
@@ -121,7 +121,7 @@ function mount({ snapshot, content, canWrite }) {
       let same = false;
       try { same = JSON.stringify(JSON.parse(disk)) === JSON.stringify(value); } catch {}
       if (same) { target.baseline = diskHash; target.verified = JSON.stringify(value); target.issue = null; return; }
-      if (diskHash !== target.baseline && (automatic || !confirm(`「${target.label}」のJSONは外部で更新されています。現在の練習タイマーの内容で上書きしますか？`))) {
+      if (diskHash !== target.baseline && (automatic || !confirm(`The JSON for “${target.label}” changed elsewhere. Overwrite it with the current Practice timer data?`))) {
         target.issue = 'conflict'; return;
       }
       const writable = await target.handle.createWritable();
@@ -149,10 +149,10 @@ function mount({ snapshot, content, canWrite }) {
       if (root.navigator?.locks) {
         await root.navigator.locks.request('practice-timer-backup-files', { ifAvailable: true }, async lock => {
           if (lock) await operation();
-          else message('別のタブで保存中です。少し後で再試行します。');
+          else message('Another tab is saving. Will try again shortly.');
         });
       } else await operation();
-    } catch { message('JSONを保存できませんでした。保存先を確認してください。'); }
+    } catch { message('Could not save JSON. Check the destination.'); }
     finally {
       busy = false; refresh();
       // 書き込み中の編集を次の保存へ引き継ぐ。エラーのある保存先は明示的な再試行を待つ。
@@ -167,29 +167,29 @@ function mount({ snapshot, content, canWrite }) {
     try {
       const handle = await root.showSaveFilePicker({
         id: 'practice-timer-json', suggestedName: FILE_NAME,
-        types: [{ description: '練習タイマーJSON', accept: { 'application/json': ['.json'] } }],
+        types: [{ description: 'Practice timer JSON', accept: { 'application/json': ['.json'] } }],
       });
-      if (handle.name !== FILE_NAME) { message(`ファイル名は ${FILE_NAME} にしてください。`); return; }
+      if (handle.name !== FILE_NAME) { message(`Use the filename ${FILE_NAME}.`); return; }
       for (const target of targets) {
         if (target.id !== replaceId && await target.handle.isSameEntry(handle)) {
-          message('このファイルは既に登録されています。'); return;
+          message('This file is already registered.'); return;
         }
       }
-      if (!await permit(handle, false)) { message('ファイルへの書き込みが許可されませんでした。'); return; }
+      if (!await permit(handle, false)) { message('Permission to write this file was not granted.'); return; }
       const disk = await (await handle.getFile()).text();
       let same = false;
       try { same = JSON.stringify(JSON.parse(disk)) === content(); } catch {}
-      if (disk && !same && !confirm('選んだJSONには別の内容があります。現在のタスク・時間・テーマ・各設定で上書きしますか？')) return;
+      if (disk && !same && !confirm('This JSON contains different data. Overwrite it with your current tasks, time, themes and settings?')) return;
       const old = targets.find(target => target.id === replaceId);
       const target = { id: old?.id || root.crypto.randomUUID(),
-        label: old?.label || $('backup-label').value.trim() || `保存先${targets.length + 1}`,
+        label: old?.label || $('backup-label').value.trim() || `Backup ${targets.length + 1}`,
         handle, baseline: await hash(disk), savedAt: null, verified: null, issue: null };
       if (old) targets[targets.indexOf(old)] = target;
       else { targets.push(target); $('backup-label').value = ''; }
       nextId = target.id;
       await remember(); renderTargets(); message('');
     } catch (error) {
-      if (error?.name !== 'AbortError') message('保存先を設定できませんでした。アクセス権と保存先を確認してください。');
+      if (error?.name !== 'AbortError') message('Could not add a backup destination. Check access and the destination.');
     } finally { busy = false; refresh(); schedule(); }
     if (nextId) await writeAll(false, [nextId]);
   }
@@ -200,7 +200,7 @@ function mount({ snapshot, content, canWrite }) {
     targets = targets.filter(target => target.id !== id);
     const saved = await remember();
     busy = false; renderTargets();
-    message('保存先の登録を解除しました。ファイルは削除していません。' + (saved ? '' : ' 設定を記憶できなかったため、次回も表示される場合は再度解除してください。'));
+    message('Backup destination removed. The file was kept.' + (saved ? '' : ' This change could not be remembered. Remove the destination again if it reappears.'));
     schedule();
   }
   function changed(next) {
@@ -231,7 +231,7 @@ function mount({ snapshot, content, canWrite }) {
         targets = (Array.isArray(saved?.targets) ? saved.targets : []).filter(target =>
           target?.handle?.kind === 'file' && target.handle.name === FILE_NAME && typeof target.baseline === 'string')
           .map(target => ({ ...target, verified: null, issue: null }));
-      } catch { message('保存先の設定を読み込めませんでした。保存先を追加し直してください。'); }
+      } catch { message('Could not load backup destinations. Please add them again.'); }
     }
     readyDone = true; renderTargets();
     if (auto) await writeAll(true);
