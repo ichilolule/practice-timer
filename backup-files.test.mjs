@@ -66,9 +66,9 @@ function file() {
 }
 
 async function mount({ db = database(), initial = { tasks: [], run: null }, supported = true, readable = true, locks } = {}) {
-  const elements = new Map(['backup-file-message', 'backup-add', 'backup-save', 'backup-label', 'backup-auto', 'backup-auto-status', 'backup-targets']
+  const elements = new Map(['backup-file-message', 'backup-add', 'backup-save', 'backup-label', 'backup-auto-status', 'backup-targets']
     .map(id => [id, new Element()]));
-  let value = initial, nextFile, accept = true, now = 1_000_000, nextTimer = 0;
+  let value = initial, nextFile, accept = true, now = 1_000_000, nextTimer = 0, downloads = 0;
   const timers = new Map();
   const context = vm.createContext({
     document: { getElementById: id => elements.get(id), createElement: () => new Element() },
@@ -84,17 +84,17 @@ async function mount({ db = database(), initial = { tasks: [], run: null }, supp
     clearTimeout(id) { timers.delete(id); },
   });
   vm.runInContext(readFileSync(new URL('./backup-files.js', import.meta.url), 'utf8'), context);
-  const controller = context.PracticeBackupFiles.mount({ snapshot: () => value, content: () => JSON.stringify(value), canWrite: () => readable });
+  const controller = context.PracticeBackupFiles.mount({ snapshot: () => value, content: () => JSON.stringify(value), canWrite: () => readable, download: () => { downloads++; } });
   await controller.ready;
   return {
     elements, db, controller,
+    get downloads() { return downloads; },
     get status() { return elements.get('backup-auto-status').textContent; },
     get message() { return elements.get('backup-file-message').textContent; },
     get cards() { return elements.get('backup-targets').children; },
     get value() { return value; },
     set accept(value) { accept = value; },
     async add(handle, name = '') { nextFile = handle; elements.get('backup-label').value = name; await elements.get('backup-add').trigger(); },
-    async auto(enabled) { elements.get('backup-auto').checked = enabled; await elements.get('backup-auto').trigger('change'); },
     edit(next) { value = next; controller.changed(JSON.stringify(next)); },
     async advance(ms) {
       now += ms;
@@ -142,12 +142,12 @@ test('外部変更を自動上書きせず、その保存先だけ停止し、�
   await app.advance(120_000);
   assert.equal(first.text, '{"external":true}');
   assert.equal(JSON.parse(second.text).tasks[0].title, '色塗り');
-  assert.match(app.cards[0].children[2].textContent, /changed elsewhere/);
+  assert.match(app.cards[0].children[2].textContent, /Changed elsewhere/);
   app.accept = false;
-  await app.cards[0].children[3].children[0].trigger();
+  await app.cards[0].children[3].children[2].children[0].trigger();
   assert.equal(first.writes.length, 1);
   app.accept = true;
-  await app.cards[0].children[3].children[0].trigger();
+  await app.cards[0].children[3].children[2].children[0].trigger();
   assert.equal(first.text, second.text);
   assert.match(app.status, /2 of 2 destinations saved/);
 });
@@ -159,19 +159,22 @@ test('再起動後は保存先を復元し、権限切れでは自動の許可�
   assert.equal(restored.cards.length, 1);
   assert.equal(handle.prompts, 0);
   assert.equal(handle.writes.length, 1);
-  assert.match(restored.cards[0].children[2].textContent, /access needs to be renewed/);
+  assert.match(restored.cards[0].children[2].textContent, /Needs access/);
   await restored.elements.get('backup-save').trigger();
   assert.equal(handle.prompts, 1);
   assert.deepEqual(JSON.parse(handle.text).tasks, ['new']);
 });
 
-test('自動保存のオフと解除を記憶し、解除してもファイルは残す', async () => {
-  const app = await mount(); const handle = file(); await app.add(handle); await app.auto(false);
-  app.edit({ tasks: ['変更'], run: null }); await app.advance(600_000);
-  assert.equal(handle.writes.length, 1);
-  const restored = await mount({ db: app.db });
-  assert.equal(restored.elements.get('backup-auto').checked, false);
-  await restored.cards[0].children[3].children[2].trigger();
+test('自動保存は常時オンで旧オフ設定からも移行し、保存先を解除してもファイルを残す', async () => {
+  const app = await mount(); const handle = file(); await app.add(handle);
+  app.db.value.auto = false;
+  const restored = await mount({ db: app.db, initial: { tasks: ['changed'], run: null } });
+  assert.deepEqual(JSON.parse(handle.text).tasks, ['changed']);
+  assert.equal(app.db.value.auto, true);
+  restored.edit({ tasks: ['next'], run: null });
+  await restored.advance(120_000);
+  assert.deepEqual(JSON.parse(handle.text).tasks, ['next']);
+  await restored.cards[0].children[3].children[2].children[2].trigger();
   assert.equal(restored.cards.length, 0);
   assert.ok(handle.text.length);
   assert.equal((await mount({ db: app.db })).cards.length, 0);
@@ -195,14 +198,14 @@ test('保存先の記憶に失敗してもJSONを書き出し、保存先の一�
   assert.equal(second.writes.length, 1);
   first.fail = true;
   app.edit({ tasks: ['次の内容'], run: null }); await app.advance(120_000);
-  assert.match(app.cards[0].children[2].textContent, /Could not save/);
+  assert.match(app.cards[0].children[2].textContent, /Save failed/);
   assert.deepEqual(JSON.parse(second.text).tasks, ['次の内容']);
 });
 
 test('非対応ブラウザと読めないローカルデータでは直接保存を無効にする', async () => {
   const unsupported = await mount({ supported: false });
   assert.equal(unsupported.elements.get('backup-add').disabled, true);
-  assert.match(unsupported.status, /Download/);
+  assert.match(unsupported.status, /downloads a JSON backup/);
   const app = await mount(); const handle = file(); await app.add(handle);
   const unreadable = await mount({ db: app.db, readable: false });
   assert.equal(unreadable.elements.get('backup-save').disabled, true);
@@ -218,4 +221,26 @@ test('別タブが保存中なら上書きせず、後の保存で再試行す�
   assert.equal(handle.writes.length, 1);
   locked = false; await app.advance(120_000);
   assert.deepEqual(JSON.parse(handle.text).tasks, ['別タブ確認']);
+});
+
+test('Save nowは登録済みの全保存先を更新し、未登録・非対応ではJSONをダウンロードする', async () => {
+  const app = await mount();
+  assert.equal(app.elements.get('backup-save').disabled, false);
+  await app.elements.get('backup-save').trigger();
+  assert.equal(app.downloads, 1);
+  const first = file(), second = file();
+  await app.add(first); await app.add(second);
+  app.edit({ tasks: ['manual'], run: null });
+  await app.elements.get('backup-save').trigger();
+  assert.deepEqual(JSON.parse(first.text).tasks, ['manual']);
+  assert.equal(first.text, second.text);
+  assert.equal(app.downloads, 1);
+  const unsupported = await mount({ supported: false });
+  assert.equal(unsupported.elements.get('backup-save').disabled, false);
+  await unsupported.elements.get('backup-save').trigger();
+  assert.equal(unsupported.downloads, 1);
+  const unreadable = await mount({ supported: false, readable: false });
+  assert.equal(unreadable.elements.get('backup-save').disabled, true);
+  await unreadable.controller.saveNow();
+  assert.equal(unreadable.downloads, 0);
 });

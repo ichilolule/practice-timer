@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Practice timer</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?rev=853f027eee">
   <script defer src="timer-core.js"></script>
-  <script defer src="practice-data.js"></script>
-  <script defer src="backup-files.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="practice-data.js?rev=62c8cf32cb"></script>
+  <script defer src="backup-files.js?rev=ce6703fa73"></script>
+  <script defer src="app.js?rev=7533475f6f"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -23,6 +23,11 @@
     <symbol id="icon-growth" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="4" rx=".6"/><rect x="4" y="10" width="16" height="4" rx=".6"/><rect x="4" y="17" width="16" height="4" rx=".6"/></symbol>
     <symbol id="icon-themes" viewBox="0 0 24 24"><path d="m3 3 8 0 10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
     <symbol id="icon-settings" viewBox="0 0 24 24"><path d="m9 3 1-2h4l1 2 2 1 2-.1 2 3-1 2v3l1 2-2 3-2-.1-2 1-1 3h-4l-1-3-2-1-2 .1-2-3 1-2V9L3 7l2-3 2 .1Z"/><circle cx="12" cy="11" r="3"/></symbol>
+    <symbol id="icon-routine" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 11h18"/></symbol>
+    <symbol id="icon-day-start" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l5 3"/></symbol>
+    <symbol id="icon-sound" viewBox="0 0 24 24"><path d="M3 9h4l6-5v16l-6-5H3ZM17 8a6 6 0 0 1 0 8M20 5a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M4 18h16c-3-3-2-6-3-10a5 5 0 0 0-10 0c-1 4 0 7-3 10ZM10 21a2 2 0 0 0 4 0M12 2V1"/></symbol>
+    <symbol id="icon-backup" viewBox="0 0 24 24"><path d="M6 19a5 5 0 0 1-1-10 7 7 0 0 1 13-1 5.5 5.5 0 0 1 0 11Z"/></symbol>
     <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   </svg>
   <main class="app">
@@ -107,12 +112,14 @@
         <button id="period-week" type="button">Week</button>
         <button id="period-month" type="button">Month</button>
         <button id="period-year" type="button">Year</button>
+        <button id="period-all" type="button">All</button>
       </div>
       <div class="period-navigation">
         <button id="period-prev" type="button" aria-label="Previous period">←</button>
         <strong id="period-label"></strong>
         <button id="period-next" type="button" aria-label="Next period">→</button>
       </div>
+      <div class="review-overview">
       <div class="growth-summary">
         <p class="growth-period-total"><span class="sr-only">Work duration for the selected period in hours and minutes</span><span id="growth-total"></span></p>
         <p id="growth-all-total" class="subtle"></p>
@@ -121,10 +128,11 @@
         <div class="period-axis" aria-hidden="true"><span id="period-chart-max"></span><span>0h 00m</span></div>
         <div id="period-chart" class="period-chart" role="group" aria-label="Work duration chart"></div>
       </div>
+      </div>
       <p id="day-untimed" class="subtle" hidden></p>
       <section id="day-records">
         <div class="day-record-heading">
-          <h3>Daily records <span id="day-record-count"></span></h3>
+          <h3>Sessions <span id="day-record-count"></span></h3>
         </div>
         <div id="record-list"></div>
       </section>
@@ -136,7 +144,7 @@
         <button id="theme-period-week" type="button">Week</button>
         <button id="theme-period-month" type="button">Month</button>
         <button id="theme-period-year" type="button">Year</button>
-        <button id="theme-period-all" type="button">All time</button>
+        <button id="theme-period-all" type="button">All</button>
       </div>
       <div class="period-navigation">
         <button id="theme-period-prev" type="button" aria-label="Previous theme period">←</button>
@@ -144,8 +152,10 @@
         <button id="theme-period-next" type="button" aria-label="Next theme period">→</button>
       </div>
       <div id="theme-scale" class="theme-scale" aria-hidden="true"><span>0h 00m</span><span id="theme-scale-max"></span></div>
-      <div id="group-list"></div>
-      <div id="theme-unset"></div>
+      <div class="theme-card-grid">
+        <div id="group-list"></div>
+        <div id="theme-unset"></div>
+      </div>
       <div id="theme-add">
         <form id="group-form" class="inline-form">
           <input id="group-title" type="text" maxlength="60" placeholder="Add theme" aria-label="Theme name" required>
@@ -155,55 +165,86 @@
       <p id="growth-status" class="sr-only" role="status" aria-live="polite"></p>
     </section>
 
-    <section id="settings-view" aria-label="Timer settings" hidden>
-      <h1>Practice timer <span class="beta">beta</span></h1>
-      <h2>Work & break sequence</h2>
-      <ol id="step-list"></ol>
-      <button id="add-step" type="button">+ Add</button>
-      <div class="controls settings-actions">
-        <button id="save-settings" type="button">Save</button>
-        <button id="cancel-settings" type="button">Cancel</button>
-      </div>
-      <p id="settings-error" role="alert"></p>
-      <h2>Review <span class="settings-hint">Autosaved</span></h2>
-      <div class="day-boundary-setting">
-        <label for="day-start">Day starts at</label>
-        <input id="day-start" type="time" step="60" value="05:00" required>
-      </div>
-      <p id="day-start-error" role="alert"></p>
-      <h2>Alert sounds <span class="settings-hint">Autosaved</span></h2>
-      <div class="sound-settings">
-        <div class="sound-field">
-          <div class="sound-field-heading"><label for="sound-volume">Volume</label><output id="sound-volume-value" for="sound-volume">20%</output></div>
-          <input id="sound-volume" type="range" min="0" max="100" step="1" value="20">
+    <section id="settings-view" aria-label="Settings" hidden>
+      <h1 class="sr-only">Practice timer <span class="beta">beta</span></h1>
+      <div class="settings-columns">
+        <div class="settings-column">
+          <section class="settings-section routine-section" aria-label="Routine">
+            <h2><svg class="icon" aria-hidden="true"><use href="#icon-routine"/></svg>Routine</h2>
+            <div class="routine-steps">
+              <ol id="step-list"></ol>
+              <button id="add-step" type="button" aria-label="Add step" title="Add step"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg></button>
+            </div>
+            <div class="controls settings-actions">
+              <button id="save-settings" type="button">Save</button>
+              <button id="cancel-settings" type="button">Cancel</button>
+            </div>
+            <p id="settings-error" role="alert"></p>
+          </section>
+          <section class="settings-section" aria-label="Day starts">
+            <h2><svg class="icon" aria-hidden="true"><use href="#icon-day-start"/></svg>Day starts</h2>
+            <div class="day-boundary-setting">
+              <label class="sr-only" for="day-start">Day starts at</label>
+              <input id="day-start" type="time" step="60" value="05:00" required>
+            </div>
+            <p id="day-start-error" role="alert"></p>
+          </section>
+          <section class="settings-section" aria-label="Sound">
+            <h2><svg class="icon" aria-hidden="true"><use href="#icon-sound"/></svg>Sound</h2>
+            <div class="sound-settings">
+              <div class="sound-field">
+                <div class="sound-field-heading"><label for="sound-volume">Volume</label><output id="sound-volume-value" for="sound-volume">20%</output></div>
+                <input id="sound-volume" type="range" min="0" max="100" step="1" value="20">
+              </div>
+              <div class="sound-field">
+                <div class="sound-field-heading"><label for="sound-pitch">Pitch</label><output id="sound-pitch-value" for="sound-pitch">Default</output></div>
+                <input id="sound-pitch" type="range" min="-12" max="12" step="1" value="0">
+              </div>
+              <div class="sound-preview" role="group" aria-label="Preview alert sounds">
+                <button id="preview-work" type="button" aria-label="Preview work sound" title="Preview work sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Work</button>
+                <button id="preview-rest" type="button" aria-label="Preview break sound" title="Preview break sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Break</button>
+              </div>
+            </div>
+            <p id="sound-status" role="alert"></p>
+          </section>
         </div>
-        <div class="sound-field">
-          <div class="sound-field-heading"><label for="sound-pitch">Pitch</label><output id="sound-pitch-value" for="sound-pitch">Default</output></div>
-          <input id="sound-pitch" type="range" min="-12" max="12" step="1" value="0">
-        </div>
-        <div class="sound-preview" role="group" aria-label="Preview alert sounds">
-          <button id="preview-work" type="button" aria-label="Preview work sound" title="Preview work sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Work</button>
-          <button id="preview-rest" type="button" aria-label="Preview break sound" title="Preview break sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>Break</button>
+        <div class="settings-column">
+          <section class="settings-section" aria-label="Notifications">
+            <div class="settings-heading">
+              <h2><svg class="icon" aria-hidden="true"><use href="#icon-bell"/></svg>Notifications</h2>
+              <span id="notification-state" class="notification-state" role="status">Off</span>
+            </div>
+            <button id="permission" type="button">Enable notifications</button>
+            <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
+          </section>
+          <section class="settings-section" aria-label="Backup">
+            <h2><svg class="icon" aria-hidden="true"><use href="#icon-backup"/></svg>Backup</h2>
+            <h3 class="backup-heading">Autosave</h3>
+            <div id="backup-targets"></div>
+            <p id="backup-auto-status" class="subtle" role="status" aria-live="polite"></p>
+            <div class="backup-add-controls">
+              <input id="backup-label" type="text" maxlength="40" placeholder="Destination name (optional)" aria-label="New backup destination name">
+              <button id="backup-add" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add destination</button>
+            </div>
+            <div class="backup-main-actions">
+              <button id="backup-save" type="button" disabled>Save now</button>
+              <label class="import-label">Import<input class="sr-only" id="import-file" type="file" accept=".json,application/json"></label>
+            </div>
+            <p id="backup-file-message" role="status" aria-live="polite"></p>
+            <p id="backup-status" role="status" aria-live="polite"></p>
+          </section>
         </div>
       </div>
-      <p id="sound-status" role="alert"></p>
-      <button id="permission" type="button">Enable notifications</button>
-      <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
-      <h2>Backup</h2>
-      <div class="backup-actions">
-        <input id="backup-label" type="text" maxlength="40" placeholder="Destination name (e.g. iCloud Drive)" aria-label="New backup destination name">
-        <button id="backup-add" type="button" disabled>Add destination</button>
-        <button id="backup-save" type="button" disabled>Save all now</button>
-      </div>
-      <div id="backup-targets"></div>
-      <label class="backup-auto"><input id="backup-auto" type="checkbox" checked> Autosave to destinations</label>
-      <p id="backup-auto-status" class="subtle" role="status" aria-live="polite"></p>
-      <p id="backup-file-message" role="status" aria-live="polite"></p>
-      <button id="export-data" type="button">Download JSON</button>
-      <label class="import-label">Import JSON <input id="import-file" type="file" accept=".json,application/json"></label>
-      <p class="subtle">Import replaces all current tasks, time, themes and settings. End your session before importing.</p>
-      <p id="backup-status" role="status" aria-live="polite"></p>
     </section>
+
+    <dialog id="theme-details-dialog" aria-label="Theme details">
+      <div class="theme-dialog-heading">
+        <h2 id="theme-details-title"></h2>
+        <button id="theme-details-close" class="quiet-button" type="button" aria-label="Close theme details">×</button>
+      </div>
+      <p id="theme-details-period" class="subtle"></p>
+      <div id="theme-details-content"></div>
+    </dialog>
 
     <div id="task-toast" class="task-toast" role="status" aria-live="polite" hidden>
       <button id="task-undo" type="button" hidden>Undo completion</button>

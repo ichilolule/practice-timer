@@ -29,7 +29,8 @@ let periodKind = 'day';
 let periodAnchor = Date.now();
 let themePeriodKind = 'all';
 let themePeriodAnchor = Date.now();
-const openThemeIds = new Set();
+let activeThemeId = null;
+const UNASSIGNED_THEME = Symbol('unassigned');
 let editingRecordId = null;
 let renamingThemeItem = null;
 let audioContext = null;
@@ -235,7 +236,9 @@ function switchView(name) {
 
 function typeField(value, index) {
   const wrapper = document.createElement('label');
-  wrapper.textContent = 'Type';
+  wrapper.className = 'step-type';
+  const label = document.createElement('span'); label.className = 'sr-only'; label.textContent = 'Type';
+  wrapper.append(label);
   const select = document.createElement('select');
   for (const [text, optionValue] of [['Choose', ''], ['Work', 'work'], ['Break', 'rest']]) {
     const option = document.createElement('option');
@@ -251,7 +254,9 @@ function typeField(value, index) {
 
 function numberField(value, index) {
   const wrapper = document.createElement('label');
-  wrapper.textContent = 'Minutes';
+  wrapper.className = 'step-minutes';
+  const label = document.createElement('span'); label.className = 'sr-only'; label.textContent = 'Minutes';
+  wrapper.append(label);
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0.1';
@@ -261,7 +266,8 @@ function numberField(value, index) {
   input.inputMode = 'decimal';
   input.value = value;
   input.addEventListener('input', () => { draft[index].minutes = input.value; });
-  wrapper.append(input);
+  const unit = document.createElement('span'); unit.className = 'step-minute-unit'; unit.textContent = 'm'; unit.setAttribute('aria-hidden', 'true');
+  wrapper.append(input, unit);
   return wrapper;
 }
 
@@ -753,6 +759,7 @@ function periodLabel(bounds, kind = periodKind) {
 }
 
 function movePeriod(direction) {
+  if (periodKind === 'all') return;
   const next = new Date(periodBounds(periodKind, periodAnchor, dayStartMinutes).start);
   if (periodKind === 'year') { next.setMonth(0, 1); next.setFullYear(next.getFullYear() + direction); }
   else if (periodKind === 'month') { next.setDate(1); next.setMonth(next.getMonth() + direction); }
@@ -768,18 +775,22 @@ function recalculateTotal() {
 }
 
 function renderGrowth() {
-  const bounds = periodBounds(periodKind, periodAnchor, dayStartMinutes);
-  const periodSessions = sessions.map((session) => ({ ...session,
+  const all = periodKind === 'all';
+  const bounds = all ? null : periodBounds(periodKind, periodAnchor, dayStartMinutes);
+  const periodSessions = all ? sessions : sessions.map((session) => ({ ...session,
     workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
   const periodMs = periodSessions.reduce((sum, session) => sum + session.workMs, 0);
-  $('period-label').textContent = periodLabel(bounds);
-  for (const kind of ['day', 'week', 'month', 'year']) {
+  $('period-label').textContent = all ? 'All time' : periodLabel(bounds);
+  $('period-prev').hidden = $('period-next').hidden = all;
+  $('period-prev').disabled = $('period-next').disabled = all;
+  for (const kind of ['day', 'week', 'month', 'year', 'all']) {
     $('period-' + kind).setAttribute('aria-pressed', String(kind === periodKind));
   }
   $('growth-total').textContent = durationText(periodMs);
   $('growth-all-total').textContent = `All time ${durationText(run?.totalWorkMs ?? totalWorkMs)}`;
   const chart = $('period-chart');
   chart.replaceChildren();
+  chart.setAttribute('data-period', periodKind);
   const buckets = periodBuckets(periodKind, periodAnchor, sessions, dayStartMinutes);
   chart.hidden = periodKind !== 'day' && !buckets.some((bucket) => bucket.workMs > 0);
   $('period-chart-layout').hidden = chart.hidden;
@@ -798,17 +809,17 @@ function renderGrowth() {
     fill.style.height = `${bucket.workMs / largest * 100}%`;
     const label = document.createElement('small');
     const hour = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const bucketLabel = periodKind === 'day' ? `${hour} – ${new Date(bucket.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+    const bucketLabel = all ? String(date.getFullYear()) : periodKind === 'day' ? `${hour} – ${new Date(bucket.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false })}`
       : periodKind === 'year' ? date.toLocaleDateString('en-US', { month: 'short' })
       : `${date.getMonth() + 1}/${date.getDate()}`;
-    label.textContent = periodKind === 'day' ? (index % 3 === 0 ? (date.getMinutes() ? hour : String(date.getHours())) : '\u00a0')
+    label.textContent = all ? bucketLabel : periodKind === 'day' ? (index % 3 === 0 ? (date.getMinutes() ? hour : String(date.getHours())) : '\u00a0')
       : periodKind === 'year' ? bucketLabel
       : periodKind === 'week' ? bucketLabel : (date.getDate() === 1 || date.getDate() % 5 === 0 ? String(date.getDate()) : '\u00a0');
     item.setAttribute('aria-label', `${bucketLabel} ${durationText(bucket.workMs)}`);
     item.title = `${bucketLabel} ${durationText(bucket.workMs)}`;
     if (periodKind !== 'day') item.addEventListener('click', () => {
       periodAnchor = bucket.start;
-      periodKind = periodKind === 'year' ? 'month' : 'day';
+      periodKind = all ? 'year' : periodKind === 'year' ? 'month' : 'day';
       renderGrowth();
     });
     track.append(fill);
@@ -897,89 +908,124 @@ function renderSubthemeChart(group, original) {
   return section;
 }
 
+function themeSelection() {
+  const bounds = themePeriodKind === 'all' ? null : periodBounds(themePeriodKind, themePeriodAnchor, dayStartMinutes);
+  const selected = bounds ? sessions.map((session) => ({ ...session,
+    workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0) : sessions;
+  return { summary: summarize(groups, selected), bounds };
+}
+
+function themeCardId(id) {
+  return id === UNASSIGNED_THEME ? 'theme-unassigned-card' : `theme-card-${id}`;
+}
+
+function themeCard(id, title, ms, scale) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.id = themeCardId(id);
+  card.className = 'theme-card';
+  card.setAttribute('data-theme-id', id === UNASSIGNED_THEME ? '' : id);
+  card.setAttribute('aria-haspopup', 'dialog');
+  card.setAttribute('aria-label', `Open ${title}: ${durationText(ms)}`);
+  const name = document.createElement('span');
+  name.className = 'theme-card-title';
+  name.textContent = title;
+  const chevron = document.createElement('span');
+  chevron.className = 'theme-chevron';
+  chevron.textContent = '›';
+  chevron.setAttribute('aria-hidden', 'true');
+  name.append(chevron);
+  const chart = themeBar('', ms, scale);
+  chart.className += ' theme-card-chart';
+  // カードの見出しと重複する空の名前は表示しない。
+  chart.children[0].children[0].hidden = true;
+  card.append(name, chart);
+  card.addEventListener('click', () => {
+    activeThemeId = id;
+    renderThemeDetails();
+    $('theme-details-dialog').showModal();
+  });
+  return card;
+}
+
 function renderThemes() {
   const all = themePeriodKind === 'all';
-  const bounds = all ? null : periodBounds(themePeriodKind, themePeriodAnchor, dayStartMinutes);
-  const selected = all ? sessions : sessions.map((session) => ({ ...session,
-    workMs: workInRange(session, bounds.start, bounds.end) })).filter((session) => session.workMs > 0);
-  const summary = summarize(groups, selected);
+  const { summary, bounds } = themeSelection();
   $('theme-period-label').textContent = all ? 'All time' : periodLabel(bounds, themePeriodKind);
   for (const kind of ['day', 'week', 'month', 'year', 'all']) {
     $('theme-period-' + kind).setAttribute('aria-pressed', String(kind === themePeriodKind));
   }
-  $('theme-period-prev').disabled = all;
-  $('theme-period-next').disabled = all;
-  $('theme-period-prev').hidden = all;
-  $('theme-period-next').hidden = all;
+  $('theme-period-prev').disabled = $('theme-period-next').disabled = all;
+  $('theme-period-prev').hidden = $('theme-period-next').hidden = all;
   const unsetMs = summary.unclassified.reduce((sum, item) => sum + item.workMs, 0);
   const scale = themeScale(Math.max(unsetMs, ...summary.groups.map((group) => group.totalMs), 0));
   $('theme-scale').hidden = !groups.length && unsetMs === 0;
   $('theme-scale-max').textContent = durationText(scale);
   const groupList = $('group-list');
   groupList.replaceChildren();
-  if (!groups.length) {
-    const empty = document.createElement('p');
-    empty.textContent = 'No themes yet. Add one below.';
-    groupList.append(empty);
-  }
-  for (const group of summary.groups) {
-    const original = groups.find((item) => item.id === group.id);
-    const card = document.createElement('details');
-    card.className = 'group-card theme-card';
-    card.setAttribute('data-theme-id', group.id);
-    card.open = openThemeIds.has(group.id);
-    card.addEventListener('toggle', () => {
-      if (card.isConnected === false) return;
-      if (card.open) openThemeIds.add(group.id);
-      else openThemeIds.delete(group.id);
-    });
-    const title = document.createElement('summary');
-    title.className = 'theme-summary';
-    const chart = themeBar(group.title, group.totalMs, scale);
-    const name = chart.children[0].children[0];
-    name.className = 'theme-name-label';
-    name.append(editIconButton(`Rename ${group.title}`, () => renameItem(original, 'Theme')));
-    title.append(chart);
-    const chevron = document.createElement('span');
-    chevron.className = 'theme-chevron';
-    chevron.textContent = '›';
-    chevron.setAttribute('aria-hidden', 'true');
-    title.append(chevron);
-    const detail = document.createElement('div');
-    detail.className = 'theme-detail-content';
-    if (group.children.length) detail.append(renderSubthemeChart(group, original));
-    const direct = document.createElement('p');
-    direct.className = 'subtle';
-    direct.textContent = `No subtheme ${durationText(group.directMs)}`;
-    if (group.directMs > 0) detail.append(direct);
-    const form = document.createElement('form');
-    form.className = 'inline-form';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 60;
-    input.required = true;
-    input.placeholder = 'Add subtheme';
-    input.setAttribute('aria-label', `Subtheme name for ${group.title}`);
-    const add = document.createElement('button');
-    add.type = 'submit';
-    add.textContent = '+ Subtheme';
-    form.append(input, add);
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const title = input.value.trim();
-      if (!title) return;
-      original.children.push({ id: newId(), title });
-      persist();
-      openThemeIds.add(group.id);
-      renderGrowth();
-    });
-    detail.append(form);
-    card.append(title, detail);
-    groupList.append(card);
-  }
-  $('theme-unset').replaceChildren();
-  if (unsetMs > 0) $('theme-unset').append(themeBar('Unassigned', unsetMs, scale));
+  for (const group of summary.groups) groupList.append(themeCard(group.id, group.title, group.totalMs, scale));
+  $('theme-unset').replaceChildren(themeCard(UNASSIGNED_THEME, 'Unassigned', unsetMs, scale));
+  if (activeThemeId != null) renderThemeDetails();
 }
+
+function renderThemeDetails() {
+  const { summary } = themeSelection();
+  const content = $('theme-details-content');
+  content.replaceChildren();
+  $('theme-details-period').textContent = $('theme-period-label').textContent;
+  if (activeThemeId === UNASSIGNED_THEME) {
+    $('theme-details-title').textContent = 'Unassigned';
+    $('theme-details-dialog').setAttribute('aria-label', 'Unassigned');
+    const total = summary.unclassified.reduce((sum, record) => sum + record.workMs, 0);
+    content.append(growthLine('Logged', total));
+    const byTask = new Map();
+    for (const record of summary.unclassified) {
+      const title = record.taskTitle || 'No task selected';
+      byTask.set(title, (byTask.get(title) || 0) + record.workMs);
+    }
+    for (const [title, ms] of byTask) content.append(growthLine(title, ms, 'p'));
+    return;
+  }
+  const original = groups.find(group => group.id === activeThemeId);
+  const group = summary.groups.find(group => group.id === activeThemeId);
+  if (!group || !original) { $('theme-details-dialog').close(); activeThemeId = null; return; }
+  $('theme-details-title').textContent = group.title;
+  $('theme-details-dialog').setAttribute('aria-label', group.title);
+  $('theme-details-title').append(editIconButton(`Rename ${group.title}`, () => renameItem(original, 'Theme')));
+  const total = growthLine('Logged', group.totalMs);
+  total.className += ' theme-dialog-total';
+  content.append(total);
+  if (group.children.length) content.append(renderSubthemeChart(group, original));
+  const direct = document.createElement('p');
+  direct.className = 'subtle';
+  direct.textContent = `No subtheme ${durationText(group.directMs)}`;
+  content.append(direct);
+  const form = document.createElement('form');
+  form.className = 'inline-form';
+  const input = document.createElement('input');
+  input.type = 'text'; input.maxLength = 60; input.required = true;
+  input.placeholder = 'Add subtheme';
+  input.setAttribute('aria-label', `Subtheme name for ${group.title}`);
+  const add = document.createElement('button');
+  add.type = 'submit'; add.textContent = '+ Subtheme';
+  form.append(input, add);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const title = input.value.trim();
+    if (!title || title.length > 60) return;
+    original.children.push({ id: newId(), title });
+    persist(); renderGrowth();
+    $('theme-details-content').querySelector('input')?.focus();
+  });
+  content.append(form);
+}
+
+$('theme-details-close').addEventListener('click', () => $('theme-details-dialog').close());
+$('theme-details-dialog').addEventListener('close', () => {
+  const previous = activeThemeId;
+  activeThemeId = null;
+  document.getElementById(themeCardId(previous))?.focus();
+});
 
 function renderDayRecords(bounds) {
   const list = $('record-list');
@@ -1200,12 +1246,25 @@ function currentBackup() {
     selectedTaskId, sound: soundSettings, dayStartMinutes };
 }
 
+function renderNotificationPermission() {
+  const permission = window.Notification?.permission || 'unsupported';
+  const labels = { granted: 'On', default: 'Off', denied: 'Blocked', unsupported: 'Unavailable' };
+  const state = $('notification-state');
+  state.textContent = labels[permission] || 'Off';
+  state.setAttribute('data-state', permission);
+  state.setAttribute('aria-label', `Notifications: ${state.textContent} (browser permission)`);
+  $('permission').hidden = permission !== 'default';
+  $('permission-status').textContent = permission === 'denied' ? 'Allow notifications in your browser’s site settings.'
+    : permission === 'unsupported' ? 'Notifications are not available in this browser.' : '';
+}
+
+addEventListener('focus', renderNotificationPermission);
+
 function showSettings() {
   if (!settingsDraftActive) draft = steps.map((step) => ({ ...step }));
   settingsDraftActive = true;
   $('settings-error').textContent = '';
-  $('permission-status').textContent = 'Notification' in window
-    ? `Notification permission: ${Notification.permission}` : 'Notifications are not available in this browser.';
+  renderNotificationPermission();
   renderSettings();
   renderSoundSettings();
   renderDayStart();
@@ -1277,6 +1336,9 @@ function renderSoundSettings() {
   const displayedVolume = soundSettings.volume / SOUND_VOLUME_SCALE;
   $('sound-volume').value = String(displayedVolume);
   $('sound-pitch').value = String(soundSettings.pitch);
+  for (const [id, percent] of [['sound-volume', displayedVolume], ['sound-pitch', (soundSettings.pitch + 12) / 24 * 100]]) {
+    $(id).style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${percent}%, var(--color-track) ${percent}%)`;
+  }
   $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0% (muted)' : `${displayedVolume}%`;
   $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? 'Default'
     : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)} semitones`;
@@ -1438,7 +1500,7 @@ $('group-form').addEventListener('submit', (event) => {
   renderGrowth();
   $('growth-status').textContent = 'Theme added.';
 });
-for (const kind of ['day', 'week', 'month', 'year']) {
+for (const kind of ['day', 'week', 'month', 'year', 'all']) {
   $('period-' + kind).addEventListener('click', () => {
     periodKind = kind;
     renderGrowth();
@@ -1549,30 +1611,25 @@ $('end').addEventListener('click', () => {
 });
 
 $('permission').addEventListener('click', async () => {
-  if (!('Notification' in window)) {
-    $('permission-status').textContent = 'Notifications are not available in this browser.';
-    return;
-  }
+  if (!window.Notification || window.Notification.permission !== 'default') { renderNotificationPermission(); return; }
   try {
-    const permission = await Notification.requestPermission();
-    $('permission-status').textContent = permission === 'granted' ? 'Notifications enabled.' : 'Notifications are not enabled.';
+    await window.Notification.requestPermission();
+    renderNotificationPermission();
   } catch {
     $('permission-status').textContent = 'Could not check notification permission.';
   }
 });
 
-$('export-data').addEventListener('click', () => {
+function downloadBackup() {
   const blob = new Blob([JSON.stringify(backupObject(), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = 'practice-timer.json';
-  document.body.append(link);
-  link.click();
-  link.remove();
+  document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   $('backup-status').textContent = 'JSON downloaded.';
-});
+}
 
 $('import-file').addEventListener('change', async () => {
   const input = $('import-file');
@@ -1587,7 +1644,8 @@ $('import-file').addEventListener('change', async () => {
     localDataReadable = true;
     settingsDraftActive = false;
     clearTaskUndo();
-    openThemeIds.clear();
+    activeThemeId = null;
+    $('theme-details-dialog').close();
     $('status').textContent = '';
     persist();
     resetTaskForm();
@@ -1630,6 +1688,7 @@ if (window.ResizeObserver) {
 }
 backupFiles = globalThis.PracticeBackupFiles.mount({
   snapshot: backupObject,
+  download: downloadBackup,
   content: () => JSON.stringify(currentBackup()),
   canWrite: () => localDataReadable,
 });

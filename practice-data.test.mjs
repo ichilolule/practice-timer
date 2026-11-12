@@ -95,3 +95,20 @@ test('24時間の棒は実際の区間で分割し、開始時刻のない記録
   assert.equal(late[0].start, +new Date(2026, 10, 11, 23, 30));
   assert.equal(late[23].end, +new Date(2026, 10, 12, 23, 30));
 });
+
+test('Allは年ごとに分割し、空の年と年境界をまたぐ区間、旧記録の合計を保つ', () => {
+  const anchor = +new Date(2026, 10, 13, 12);
+  const crossing = { startedAt: +new Date(2024, 0, 1, 4, 50), endedAt: +new Date(2024, 0, 1, 5, 10), workMs: 1_200_000 };
+  const legacy = { startedAt: null, endedAt: +new Date(2026, 0, 1, 4), workMs: 600_000 };
+  const exactEnd = { startedAt: +new Date(2027, 0, 1, 4, 50), endedAt: +new Date(2027, 0, 1, 5), workMs: 600_000 };
+  const buckets = data.periodBuckets('all', anchor, [crossing, legacy, exactEnd], 300);
+  assert.deepEqual(buckets.map(bucket => new Date(bucket.start).getFullYear()), [2023, 2024, 2025, 2026]);
+  assert.deepEqual(buckets.map(bucket => bucket.workMs), [600_000, 600_000, 600_000, 600_000]);
+  const emptyYear = data.periodBuckets('all', anchor, [crossing, exactEnd], 300);
+  assert.equal(emptyYear[2].workMs, 0);
+  assert.equal(emptyYear.reduce((sum, bucket) => sum + bucket.workMs, 0), 1_800_000);
+  const empty = data.periodBuckets('all', anchor, [], 300);
+  assert.equal(empty.length, 1);
+  assert.equal(empty[0].start, +new Date(2026, 0, 1, 5));
+  assert.equal(empty[0].workMs, 0);
+});

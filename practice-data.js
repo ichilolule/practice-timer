@@ -69,12 +69,22 @@ function workInRange(session, start, end) {
 }
 
 function periodBuckets(kind, anchor, sessions, dayStartMinutes = 0) {
-  const bounds = periodBounds(kind, anchor, dayStartMinutes);
+  const bounds = kind === 'all' ? (() => {
+    const first = sessions.reduce((earliest, session) => Math.min(earliest, session.startedAt ?? session.endedAt), Infinity);
+    // 終了ちょうどの境界は次の年の作業として数えない。旧記録は終了時点へ割り当てる。
+    const last = sessions.reduce((latest, session) => Math.max(latest,
+      session.endedAt - (session.startedAt == null ? 0 : 1)), -Infinity);
+    return {
+      start: periodBounds('year', Number.isFinite(first) ? first : anchor, dayStartMinutes).start,
+      end: periodBounds('year', Number.isFinite(last) ? last : anchor, dayStartMinutes).end,
+    };
+  })() : periodBounds(kind, anchor, dayStartMinutes);
   const buckets = [];
   let cursor = new Date(bounds.start);
   while (cursor.getTime() < bounds.end) {
     const start = cursor.getTime();
     if (kind === 'day') cursor = new Date(Math.min(start + 3_600_000, bounds.end));
+    else if (kind === 'all') cursor.setFullYear(cursor.getFullYear() + 1);
     else if (kind === 'year') cursor.setMonth(cursor.getMonth() + 1);
     else cursor.setDate(cursor.getDate() + 1);
     if (kind !== 'day') cursor.setHours(Math.floor(dayStartMinutes / 60), dayStartMinutes % 60, 0, 0);

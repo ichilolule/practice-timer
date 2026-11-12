@@ -31,10 +31,10 @@ async function hash(text) {
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
 }
 
-function mount({ snapshot, content, canWrite }) {
+function mount({ snapshot, content, canWrite, download }) {
   const $ = id => document.getElementById(id);
   const supported = typeof root.showSaveFilePicker === 'function' && !!root.indexedDB && !!root.crypto?.subtle;
-  let targets = [], auto = true, readyDone = false, busy = false;
+  let targets = [], readyDone = false, busy = false;
   let idleTimer = null, maxTimer = null, observed = content(), remembered = true;
   let wasWritable = canWrite();
   const details = new Map();
@@ -46,7 +46,7 @@ function mount({ snapshot, content, canWrite }) {
     idleTimer = maxTimer = null;
   }
   function schedule() {
-    if (!readyDone || busy || !auto || !canWrite() || !targets.some(target => !target.issue && target.verified !== observed)) return;
+    if (!readyDone || busy || !canWrite() || !targets.some(target => !target.issue && target.verified !== observed)) return;
     if (idleTimer !== null) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => writeAll(true), IDLE_MS);
     if (maxTimer === null) maxTimer = setTimeout(() => writeAll(true), MAX_MS);
@@ -60,20 +60,21 @@ function mount({ snapshot, content, canWrite }) {
   function refresh() {
     $('backup-add').disabled = !supported || !readyDone || busy || !canWrite();
     $('backup-label').disabled = $('backup-add').disabled;
-    $('backup-save').disabled = $('backup-add').disabled || !targets.length;
-    $('backup-auto').disabled = !supported || !readyDone || busy;
-    $('backup-auto').checked = auto;
+    $('backup-save').disabled = !readyDone || busy || !canWrite();
     const saved = targets.filter(target => !target.issue && target.verified === observed).length;
-    $('backup-auto-status').textContent = !supported
-      ? 'File autosave is not available in this browser. Download a JSON backup instead.'
-      : !canWrite() ? 'File saving is paused because browser data could not be read. Import a backup to restore your data.'
+    $('backup-auto-status').textContent = !canWrite()
+      ? 'File saving is paused because browser data could not be read. Import a backup to restore your data.'
+      : !supported ? 'File autosave is not available in this browser. Save now downloads a JSON backup.'
       : !targets.length ? 'Add a backup destination to enable autosave.'
-      : `${saved} of ${targets.length} destinations saved.` + (busy ? ' Saving…' : auto ? '' : ' Autosave is off.') +
+      : `${saved} of ${targets.length} destinations saved.` + (busy ? ' Saving…' : '') +
         (remembered ? '' : ' Backup destinations could not be remembered. You may need to add them again next time.');
     for (const target of targets) {
       const detail = details.get(target.id);
       if (!detail) continue;
-      detail.text.textContent = status(target) + (target.savedAt ? ` Last saved: ${new Date(target.savedAt).toLocaleString('en-US')}` : '');
+      detail.text.textContent = target.issue === 'conflict' ? 'Changed elsewhere' : target.issue === 'permission' ? 'Needs access'
+        : target.issue === 'error' ? 'Save failed' : target.verified === observed ? '✓ Saved' : 'Pending';
+      detail.text.className = `backup-target-status${target.issue ? ' has-issue' : ''}`;
+      detail.info.textContent = status(target) + (target.savedAt ? ` Last saved: ${new Date(target.savedAt).toLocaleString('en-US')}` : '');
       for (const button of detail.buttons) button.disabled = busy || !canWrite();
     }
   }
@@ -83,9 +84,14 @@ function mount({ snapshot, content, canWrite }) {
     for (const target of targets) {
       const card = document.createElement('div'); card.className = 'backup-target';
       const title = document.createElement('strong'); title.textContent = target.label;
-      const file = document.createElement('p'); file.className = 'subtle'; file.textContent = target.handle.name;
-      const text = document.createElement('p'); text.className = 'subtle';
+      const file = document.createElement('p'); file.className = 'sr-only'; file.textContent = target.handle.name;
+      const text = document.createElement('p'); text.className = 'backup-target-status';
+      const menu = document.createElement('details'); menu.className = 'backup-target-menu';
+      const toggle = document.createElement('summary'); toggle.textContent = '•••';
+      toggle.title = `Manage ${target.label}`;
+      const info = document.createElement('p'); info.className = 'subtle';
       const actions = document.createElement('div'); actions.className = 'backup-actions';
+      menu.append(toggle, info, actions);
       const buttons = [
         ['Save', () => writeAll(false, [target.id])],
         ['Change', () => choose(target.id)],
@@ -94,14 +100,14 @@ function mount({ snapshot, content, canWrite }) {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
         button.addEventListener('click', action); actions.append(button); return button;
       });
-      card.append(title, file, text, actions); list.append(card);
-      details.set(target.id, { text, buttons });
+      card.append(title, file, text, menu); list.append(card);
+      details.set(target.id, { text, info, buttons });
     }
     refresh();
   }
   async function remember() {
     try {
-      await record({ auto, targets: targets.map(({ id, label, handle, baseline, savedAt }) => ({ id, label, handle, baseline, savedAt })) });
+      await record({ auto: true, targets: targets.map(({ id, label, handle, baseline, savedAt }) => ({ id, label, handle, baseline, savedAt })) });
       remembered = true;
     } catch { remembered = false; }
     return remembered;
@@ -213,31 +219,26 @@ function mount({ snapshot, content, canWrite }) {
   }
 
   $('backup-add').addEventListener('click', () => choose());
-  $('backup-save').addEventListener('click', () => writeAll());
-  $('backup-auto').addEventListener('change', async () => {
-    if (busy) return;
-    busy = true;
-    auto = $('backup-auto').checked;
-    clearTimers(); refresh();
-    await remember();
-    busy = false; refresh();
-    if (auto) schedule();
-  });
+  async function saveNow() {
+    if (!readyDone || busy || !canWrite()) return;
+    if (!supported || !targets.length) { download?.(); return; }
+    await writeAll();
+  }
+  $('backup-save').addEventListener('click', saveNow);
   const ready = (async () => {
     if (supported) {
       try {
         const saved = await record();
-        auto = saved?.auto !== false;
         targets = (Array.isArray(saved?.targets) ? saved.targets : []).filter(target =>
           target?.handle?.kind === 'file' && target.handle.name === FILE_NAME && typeof target.baseline === 'string')
           .map(target => ({ ...target, verified: null, issue: null }));
       } catch { message('Could not load backup destinations. Please add them again.'); }
     }
     readyDone = true; renderTargets();
-    if (auto) await writeAll(true);
+    await writeAll(true);
   })();
   refresh();
-  return { changed, ready };
+  return { changed, ready, saveNow };
 }
 
 root.PracticeBackupFiles = { mount };
