@@ -270,6 +270,22 @@ function rowButton(label, title, onClick, disabled = false) {
   return button;
 }
 
+function editIconButton(title, onClick) {
+  const button = rowButton('', title, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+  });
+  button.className = 'theme-edit';
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('class', 'icon');
+  icon.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#icon-work');
+  icon.append(use); button.append(icon);
+  return button;
+}
+
 function moveRow(from, to) {
   if (to < 0 || to >= draft.length || from === to) return;
   const [row] = draft.splice(from, 1);
@@ -621,6 +637,7 @@ function renameItem(item, label) {
   $('theme-name-title').textContent = `${label}の名前`;
   $('theme-name').value = item.title;
   $('theme-name-error').textContent = '';
+  $('theme-name-delete').textContent = `${label}を削除`;
   $('theme-name-dialog').showModal();
   $('theme-name').focus();
 }
@@ -642,10 +659,19 @@ $('theme-name-form').addEventListener('submit', (event) => {
 });
 $('theme-name-cancel').addEventListener('click', () => $('theme-name-dialog').close());
 $('theme-name-dialog').addEventListener('close', () => { renamingThemeItem = null; });
+$('theme-name-delete').addEventListener('click', () => {
+  if (!renamingThemeItem) return;
+  const group = groups.find(item => item === renamingThemeItem || item.children.includes(renamingThemeItem));
+  if (!group) return;
+  if (removeGroup(group, group === renamingThemeItem ? null : renamingThemeItem)) {
+    $('theme-name-dialog').close();
+    renamingThemeItem = null;
+  }
+});
 
 function removeGroup(group, child = null) {
   const label = child?.title || group.title;
-  if (!confirm(`「${label}」を削除しますか？記録のテーマは未設定になります。`)) return;
+  if (!confirm(`「${label}」を削除しますか？記録のテーマは未設定になります。`)) return false;
   const removedIds = child ? [child.id] : [group.id, ...group.children.map((item) => item.id)];
   clearTargets(removedIds, tasks, sessions);
   if (child) group.children = group.children.filter((item) => item.id !== child.id);
@@ -654,6 +680,7 @@ function removeGroup(group, child = null) {
   renderGrowth();
   renderTasks();
   renderTaskChoice();
+  return true;
 }
 
 function durationText(ms) {
@@ -791,7 +818,7 @@ function renderGrowth() {
   renderThemes();
 }
 
-function renderSubthemeChart(group) {
+function renderSubthemeChart(group, original) {
   const section = document.createElement('section');
   section.className = 'subtheme-section';
   const heading = document.createElement('h3');
@@ -834,6 +861,9 @@ function renderSubthemeChart(group) {
     const name = document.createElement('th');
     name.setAttribute('scope', 'row');
     name.textContent = child.title;
+    name.className = 'subtheme-name';
+    const originalChild = original.children.find(item => item.id === child.id);
+    name.append(editIconButton(`${child.title}の名前を変更`, () => renameItem(originalChild, 'サブテーマ')));
     const cell = document.createElement('td');
     cell.className = 'theme-track-cell';
     cell.setAttribute('aria-hidden', 'true');
@@ -899,7 +929,11 @@ function renderThemes() {
     });
     const title = document.createElement('summary');
     title.className = 'theme-summary';
-    title.append(themeBar(group.title, group.totalMs, scale));
+    const chart = themeBar(group.title, group.totalMs, scale);
+    const name = chart.children[0].children[0];
+    name.className = 'theme-name-label';
+    name.append(editIconButton(`${group.title}の名前を変更`, () => renameItem(original, 'テーマ')));
+    title.append(chart);
     const chevron = document.createElement('span');
     chevron.className = 'theme-chevron';
     chevron.textContent = '›';
@@ -907,30 +941,11 @@ function renderThemes() {
     title.append(chevron);
     const detail = document.createElement('div');
     detail.className = 'theme-detail-content';
-    if (group.children.length) detail.append(renderSubthemeChart(group));
+    if (group.children.length) detail.append(renderSubthemeChart(group, original));
     const direct = document.createElement('p');
     direct.className = 'subtle';
     direct.textContent = `サブテーマなし ${durationText(group.directMs)}`;
     if (group.directMs > 0) detail.append(direct);
-    const menu = document.createElement('details');
-    menu.className = 'theme-edit-menu';
-    const menuTitle = document.createElement('summary');
-    menuTitle.textContent = '編集';
-    menu.append(menuTitle,
-      rowButton('名前変更', `${group.title}の名前を変更`, () => renameItem(original, 'テーマ')),
-      rowButton('削除', `${group.title}を削除`, () => removeGroup(original)));
-    const children = document.createElement('ul');
-    for (const child of group.children) {
-      const item = document.createElement('li');
-      const originalChild = original.children.find((entry) => entry.id === child.id);
-      const label = document.createElement('span');
-      label.textContent = child.title;
-      item.append(label,
-        rowButton('名前変更', `${child.title}の名前を変更`, () => renameItem(originalChild, 'サブテーマ')),
-        rowButton('削除', `${child.title}を削除`, () => removeGroup(original, originalChild)));
-      children.append(item);
-    }
-    menu.append(children);
     const form = document.createElement('form');
     form.className = 'inline-form';
     const input = document.createElement('input');
@@ -952,7 +967,7 @@ function renderThemes() {
       openThemeIds.add(group.id);
       renderGrowth();
     });
-    detail.append(form, menu);
+    detail.append(form);
     card.append(title, detail);
     groupList.append(card);
   }
@@ -985,14 +1000,8 @@ function renderDayRecords(bounds) {
     range.className = 'record-range';
     range.textContent = `${session.startedAt == null ? '開始時刻なし' : recordTimeLabel(session.startedAt, bounds)} ～ ${recordTimeLabel(session.endedAt, bounds)}`;
     detail.append(range);
-    const edit = rowButton('', `${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session));
+    const edit = editIconButton(`${session.taskTitle || 'タスク未選択'}の記録を修正または削除`, () => openRecordEditor(session));
     edit.className = 'record-edit';
-    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    icon.setAttribute('class', 'icon');
-    icon.setAttribute('aria-hidden', 'true');
-    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#icon-work');
-    icon.append(use); edit.append(icon);
     row.append(heading, detail, edit);
     list.append(row);
   }
@@ -1597,14 +1606,20 @@ addEventListener('beforeunload', () => {
 load();
 // 折り返し・文字サイズ・端末の安全領域に合わせ、末尾のタスクと取り消し通知の重なりを防ぐ。
 if (window.ResizeObserver) {
+  const heightProperties = {
+    'quick-task-form': '--task-entry-height',
+    'theme-add': '--theme-entry-height',
+    'primary-nav': '--primary-nav-height',
+  };
   const fixedControls = new window.ResizeObserver(entries => {
     for (const { target } of entries) {
       const height = target.getBoundingClientRect().height;
       if (height > 0) document.documentElement.style.setProperty(
-        target.id === 'quick-task-form' ? '--task-entry-height' : '--primary-nav-height', `${height}px`);
+        heightProperties[target.id], `${height}px`);
     }
   });
   fixedControls.observe($('quick-task-form'), { box: 'border-box' });
+  fixedControls.observe($('theme-add'), { box: 'border-box' });
   fixedControls.observe($('primary-nav'), { box: 'border-box' });
 }
 backupFiles = globalThis.PracticeBackupFiles.mount({

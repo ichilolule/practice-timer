@@ -29,7 +29,7 @@ class Element {
   showModal() { this.open = true; }
   close() { this.open = false; }
   reset() { for (const child of this.children) { child.value = ''; child.reset(); } }
-  async trigger(type, event = {}) { return this.listeners.get(type)?.({ preventDefault() {}, ...event }); }
+  async trigger(type, event = {}) { return this.listeners.get(type)?.({ preventDefault() {}, stopPropagation() {}, ...event }); }
   setPointerCapture() {}
   hasPointerCapture() { return false; }
   getBoundingClientRect() { return this.bounds || { top: 0, bottom: 400, left: 0, right: 300, height: 400 }; }
@@ -159,14 +159,17 @@ test('下部の入力欄が折り返しても末尾用の余白を追従させ�
       observe(element) { observed.push(element); }
     };
   });
-  assert.deepEqual(observed, [app.elements.get('quick-task-form'), app.elements.get('primary-nav')]);
+  assert.deepEqual(observed, [app.elements.get('quick-task-form'), app.elements.get('theme-add'), app.elements.get('primary-nav')]);
   const entry = (id, height) => ({ target: { id, getBoundingClientRect: () => ({ height }) } });
-  resize([entry('quick-task-form', 69), entry('primary-nav', 69)]);
+  resize([entry('quick-task-form', 69), entry('theme-add', 69), entry('primary-nav', 69)]);
+  assert.equal(measured.get('--theme-entry-height'), '69px');
   assert.equal(measured.get('--task-entry-height'), '69px');
-  resize([entry('quick-task-form', 113)]);
+  resize([entry('quick-task-form', 113), entry('theme-add', 100)]);
   assert.equal(measured.get('--task-entry-height'), '113px');
-  resize([entry('quick-task-form', 0), entry('primary-nav', 90)]);
+  assert.equal(measured.get('--theme-entry-height'), '100px');
+  resize([entry('quick-task-form', 0), entry('theme-add', 0), entry('primary-nav', 90)]);
   assert.equal(measured.get('--task-entry-height'), '113px');
+  assert.equal(measured.get('--theme-entry-height'), '100px');
   assert.equal(measured.get('--primary-nav-height'), '90px');
   assert.equal(storage.size, 0);
 });
@@ -1045,6 +1048,57 @@ test('テーマとサブテーマの名前はアプリ内で変更でき、記�
   assert.equal(saved.groups[0].children[0].title, '手の形');
   assert.equal(saved.sessions[0].targetId, 'subtheme');
   assert.equal(saved.totalWorkMs, 600_000);
+});
+
+test('名前横のペンから削除でき、確認の取り消しと記録・時間の保持ができる', async () => {
+  const original = JSON.stringify({ format: 'practice-timer-beta', version: 1,
+    steps: [], run: null, totalWorkMs: 900_000,
+    tasks: [{ id: 'task', title: '手を描く', firstStep: '', targetId: 'hand', completedAt: null }],
+    groups: [{ id: 'body', title: '人体', children: [{ id: 'hand', title: '手' }, { id: 'foot', title: '足' }] }],
+    sessions: [
+      { id: 'record', startedAt: null, endedAt: 1_000_000, workMs: 600_000, targetId: 'hand' },
+      { id: 'direct', startedAt: null, endedAt: 1_000_000, workMs: 300_000, targetId: 'body' },
+    ],
+  });
+  let accept = false;
+  const { elements, storage } = mount(new Map([['practice-timer-v1', original]]), undefined, 1_000_000,
+    context => { context.confirm = () => accept; });
+  const find = (node, label) => node.getAttribute('aria-label') === label ? node : node.children.map(child => find(child, label)).find(Boolean);
+  await elements.get('nav-themes').trigger('click');
+  let card = elements.get('group-list').children[0];
+  let prevented = false, stopped = false;
+  await find(card.children[0], '人体の名前を変更').trigger('click', {
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; },
+  });
+  assert.equal(prevented, true);
+  assert.equal(stopped, true);
+  assert.equal(elements.get('theme-name-delete').textContent, 'テーマを削除');
+  await elements.get('theme-name-delete').trigger('click');
+  assert.equal(elements.get('theme-name-dialog').open, true);
+  assert.equal(storage.get('practice-timer-v1'), original);
+  await elements.get('theme-name-cancel').trigger('click');
+  const childCell = card.querySelector('tbody').children[0].children[0];
+  await find(childCell, '手の名前を変更').trigger('click');
+  assert.equal(elements.get('theme-name-delete').textContent, 'サブテーマを削除');
+  elements.get('theme-name').value = '';
+  accept = true;
+  await elements.get('theme-name-delete').trigger('click');
+  assert.equal(elements.get('theme-name-dialog').open, false);
+  let saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.deepEqual(saved.groups[0].children.map(child => child.id), ['foot']);
+  assert.equal(saved.tasks[0].targetId, null);
+  assert.equal(saved.sessions[0].targetId, null);
+  assert.equal(saved.sessions[1].targetId, 'body');
+  assert.equal(saved.totalWorkMs, 900_000);
+  card = elements.get('group-list').children[0];
+  await find(card.children[0], '人体の名前を変更').trigger('click');
+  await elements.get('theme-name-delete').trigger('click');
+  saved = JSON.parse(storage.get('practice-timer-v1'));
+  assert.equal(saved.groups.length, 0);
+  assert.equal(saved.sessions.length, 2);
+  assert.equal(saved.tasks.length, 1);
+  assert.equal(saved.sessions[1].targetId, null);
+  assert.equal(saved.totalWorkMs, 900_000);
 });
 
 test('日付をまたぐ記録は選択日以外の日付と当日分の時間を表示する', async () => {
