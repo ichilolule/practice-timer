@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Practice timer</title>
-  <link rel="stylesheet" href="styles.css?rev=fdf207cf5c">
+  <link rel="stylesheet" href="styles.css?rev=7d60a20845">
   <script defer src="timer-core.js"></script>
   <script defer src="practice-data.js?rev=62c8cf32cb"></script>
   <script defer src="backup-files.js?rev=ce6703fa73"></script>
@@ -48,17 +48,19 @@
             <p id="active-task-hint" class="subtle" hidden></p>
           </div>
           <h2 id="idle-task-title">Practice timer</h2>
-          <div id="timer-dial" class="timer-dial">
-            <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
-              <circle class="timer-ring-track" cx="50" cy="50" r="47"/>
-              <circle id="timer-ring-remaining" cx="50" cy="50" r="47" pathLength="100" stroke-dasharray="100 100"/>
-            </svg>
-            <div class="timer-dial-content">
-              <div id="phase-name" class="phase" role="img" aria-label="No timer sequence" title="No timer sequence">
-                <svg class="icon" aria-hidden="true"><use id="phase-icon" href="#icon-settings"/></svg>
-                <svg id="phase-paused" class="icon pause-badge" aria-hidden="true" hidden><use href="#icon-pause"/></svg>
+          <div class="timer-dial-space">
+            <div id="timer-dial" class="timer-dial">
+              <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="timer-ring-track" cx="50" cy="50" r="47"/>
+                <circle id="timer-ring-remaining" cx="50" cy="50" r="47" pathLength="100" stroke-dasharray="100 100"/>
+              </svg>
+              <div class="timer-dial-content">
+                <div id="phase-name" class="phase" role="img" aria-label="No timer sequence" title="No timer sequence">
+                  <svg class="icon" aria-hidden="true"><use id="phase-icon" href="#icon-settings"/></svg>
+                  <svg id="phase-paused" class="icon pause-badge" aria-hidden="true" hidden><use href="#icon-pause"/></svg>
+                </div>
+                <div id="clock" role="timer" aria-label="Time remaining">00:00</div>
               </div>
-              <div id="clock" role="timer" aria-label="Time remaining">00:00</div>
             </div>
           </div>
           <div class="timer-controls">

@@ -21,12 +21,16 @@
   --shadow-toast: #44271c20;
   --overlay: #44271c66;
   --font-ui: "Avenir Next", Avenir, "Hiragino Sans", "Yu Gothic", sans-serif;
-  --app-max-width: 80rem;
-  --primary-nav-height: calc(4.75rem + env(safe-area-inset-bottom));
+  --app-max-width: 62.5rem;
+  --primary-nav-height: calc(3.5rem + env(safe-area-inset-bottom));
+  --page-padding: clamp(1rem, 3.2vw, 2rem);
+  --timer-diameter: clamp(17.5rem, 40vw, 24rem);
+  --timer-action-size: clamp(4rem, 8vw, 5rem);
   --task-entry-height: 7.5rem;
   --theme-entry-height: 7.5rem;
-  /* 1280 × 1000 is the reference size. Fit both dimensions at one shared 50%–125% scale. */
-  font-size: clamp(8px, min(1.25vw, 1.6dvh), 20px);
+  /* Keep UI text readable at every window size and respect browser text/zoom settings.
+     Only the dial, prominent numbers and spacing grow, with individual upper limits. */
+  font-size: 100%;
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-page);
@@ -108,17 +112,17 @@ dialog h2 { margin-top: 0; }
 .inline-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.875rem 0; }
 /* Shared period switcher and Review. */
 .period-tabs { display: flex; gap: 0; padding: 0.125rem; margin: 0.5rem 0 1.125rem; border: 0.0625rem solid var(--color-border); border-radius: 0.875rem; }
-.period-tabs button { position: relative; flex: 1; min-width: 0; min-height: 2rem; padding: 0.25rem; border: 0; border-radius: 0.625rem; background: transparent; font-size: 1rem; font-weight: 500; }
+.period-tabs button { position: relative; flex: 1; min-width: 0; min-height: 2.75rem; padding: 0.25rem; border: 0; border-radius: 0.625rem; background: transparent; font-size: .9375rem; font-weight: 500; }
 .period-tabs button[aria-pressed="true"] { background: var(--color-selection); font-weight: 650; }
 .period-navigation { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 3rem; align-items: center; gap: 1rem; max-width: 38.75rem; min-height: 3rem; margin: 0 auto 1.75rem; }
-.period-navigation strong { grid-column: 2; grid-row: 1; text-align: center; font-size: 1.5rem; font-weight: 600; }
+.period-navigation strong { grid-column: 2; grid-row: 1; text-align: center; font-size: clamp(1.125rem, 2.4vw, 1.5rem); font-weight: 600; }
 .period-navigation button { padding: 0; width: 3rem; height: 3rem; border-radius: 0.75rem; font-size: 1.6rem; }
 #period-prev, #theme-period-prev { grid-column: 1; grid-row: 1; }
 #period-next, #theme-period-next { grid-column: 3; grid-row: 1; }
 .review-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr); align-items: center; margin: 1.875rem 0 2.5rem; }
 .growth-summary { padding-right: 1.5rem; text-align: left; font-variant-numeric: tabular-nums; }
-.growth-period-total { margin: 0; font-size: 4.2rem; line-height: 1.2; font-weight: 650; letter-spacing: -.04em; overflow-wrap: anywhere; color: var(--color-primary); }
-#growth-all-total { margin: 0.75rem 0 0; font-size: 1.25rem; }
+.growth-period-total { margin: 0; font-size: clamp(2.5rem, 8vw, 3.5rem); line-height: 1.2; font-weight: 650; letter-spacing: -.04em; overflow-wrap: anywhere; color: var(--color-primary); }
+#growth-all-total { margin: 0.75rem 0 0; font-size: 1rem; }
 .period-chart-layout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.625rem; min-width: 0; padding: 1rem 0 0 1.5rem; border-left: 0.0625rem solid var(--color-border); }
 .period-axis { display: flex; flex-direction: column; justify-content: space-between; height: 11.875rem; color: var(--color-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .period-chart { display: flex; gap: 0.1875rem; padding-inline: 0.75rem; height: 14.375rem; min-width: 0; overflow-x: auto; overflow-y: hidden; }
@@ -126,21 +130,21 @@ dialog h2 { margin-top: 0; }
 .period-chart[data-period="all"] .period-bar { min-width: 2.75rem; }
 .period-bar-track { width: 100%; height: 11.875rem; flex-shrink: 0; display: flex; align-items: end; justify-content: center; border-bottom: 0.0625rem solid var(--color-border); background: linear-gradient(var(--color-line), var(--color-line)) top / 100% 0.0625rem no-repeat; }
 .period-bar-fill { width: min(100%, 2.75rem); background: var(--color-accent); border-radius: 0.3125rem 0.3125rem 0 0; }
-.period-bar small { width: 100%; min-height: 1.625rem; text-align: center; padding-top: 0.375rem; white-space: nowrap; font-size: .72rem; }
+.period-bar small { width: 100%; min-height: 1.625rem; text-align: center; padding-top: 0.375rem; white-space: nowrap; font-size: .75rem; }
 #day-untimed { margin: -1.5rem 0 1.875rem; font-size: .85rem; }
 .growth-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 1rem; margin: 0; font-size: 1rem; }
 .growth-line > :first-child { min-width: 0; overflow-wrap: anywhere; }
 .growth-duration { white-space: nowrap; font-variant-numeric: tabular-nums; }
 #day-records { border-top: 0.0625rem solid var(--color-line); }
-.day-record-heading h3 { margin: 1.375rem 0; font-size: 1.6rem; font-weight: 650; }
-#record-list .record-row { display: grid; grid-template-columns: 17ch 3rem minmax(0, 1fr) max-content; align-items: center; gap: 1.125rem; min-height: 5rem; padding: 0.625rem 0; font-size: 1.1rem; }
+.day-record-heading h3 { margin: 1.375rem 0; font-size: 1.25rem; font-weight: 650; }
+#record-list .record-row { display: grid; grid-template-columns: 12ch 2.75rem minmax(0, 1fr) max-content; align-items: center; gap: clamp(.5rem, 1.6vw, 1rem); min-height: 4rem; padding: 0.625rem 0; font-size: 1rem; }
 .record-main { display: contents; font-weight: 600; }
 .record-main > :first-child { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.record-main > .growth-duration { grid-column: 4; grid-row: 1; display: flex; align-items: center; gap: 0.25rem; font-size: 1.1rem; }
-#record-list .record-meta { grid-column: 1; grid-row: 1; margin: 0; min-width: 0; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.record-main > .growth-duration { grid-column: 4; grid-row: 1; display: flex; align-items: center; gap: 0.25rem; font-size: 1rem; }
+#record-list .record-meta { grid-column: 1; grid-row: 1; margin: 0; min-width: 0; font-size: .875rem; font-variant-numeric: tabular-nums; }
 .record-range { overflow-wrap: anywhere; }
-.record-day-marker { color: var(--color-muted); font-size: .65rem; font-weight: 400; white-space: nowrap; }
-#record-list .record-edit { grid-column: 2; grid-row: 1; display: grid; place-items: center; width: 3rem; height: 3rem; padding: 0; border: 0.0625rem solid var(--color-border); border-radius: 0.75rem; background: var(--color-surface); color: var(--color-primary); }
+.record-day-marker { color: var(--color-muted); font-size: .75rem; font-weight: 400; white-space: nowrap; }
+#record-list .record-edit { grid-column: 2; grid-row: 1; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 0.0625rem solid var(--color-border); border-radius: 0.75rem; background: var(--color-surface); color: var(--color-primary); }
 .record-edit .icon { width: 1.5rem; height: 1.5rem; }
 
 /* Theme cards open a dialog; the add bar stays above the bottom navigation. */
@@ -153,7 +157,7 @@ dialog h2 { margin-top: 0; }
 #group-list, #theme-unset { display: contents; }
 .theme-card { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; width: 100%; min-width: 0; min-height: 8.75rem; padding: 0; overflow: hidden; border: 0.0625rem solid var(--color-border); border-radius: 1.125rem; text-align: left; background: var(--color-surface); }
 .theme-card:hover:not(:disabled) { background: var(--color-surface); border-color: var(--color-primary); }
-.theme-card-title { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1.25rem; background: var(--color-sidebar); font-size: 1.35rem; font-weight: 650; overflow-wrap: anywhere; }
+.theme-card-title { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--color-sidebar); font-size: 1.25rem; font-weight: 650; overflow-wrap: anywhere; }
 .theme-card:hover .theme-card-title { background: var(--color-selection); }
 .theme-chevron { flex-shrink: 0; font-size: 2rem; font-weight: 400; line-height: 1; }
 .theme-chart-row { display: grid; gap: 0.75rem; min-width: 0; }
@@ -176,7 +180,7 @@ dialog h2 { margin-top: 0; }
 .subtheme-table thead th { padding: 0.375rem 0; }
 .subtheme-table .theme-track-cell { position: relative; }
 .subtheme-reference { position: absolute; top: 0; bottom: 0; width: 0.0625rem; background: var(--color-muted); opacity: .65; pointer-events: none; }
-.theme-edit { display: inline-grid; place-items: center; vertical-align: middle; flex-shrink: 0; width: 2rem; height: 2rem; min-width: 2rem; min-height: 2rem; margin: 0 0 0 0.25rem; padding: 0; border-color: transparent; background: transparent; color: var(--color-muted); }
+.theme-edit { display: inline-grid; place-items: center; vertical-align: middle; flex-shrink: 0; width: 2.75rem; height: 2.75rem; min-width: 2.75rem; min-height: 2.75rem; margin: 0 0 0 0.25rem; padding: 0; border-color: transparent; background: transparent; color: var(--color-muted); }
 .theme-edit .icon { width: 1.125rem; height: 1.125rem; }
 .theme-name-label { min-width: 0; }
 .subtheme-name .theme-edit { margin-right: 0; }
@@ -230,25 +234,28 @@ dialog h2 { margin-top: 0; }
 
 /* Timer: cream dial beside a pale blue task panel. */
 .app { width: min(100%, var(--app-max-width)); min-height: 100vh; min-height: 100dvh; margin: 0 auto; padding: 0 0 var(--primary-nav-height); background: var(--color-surface); }
-.app > section:not(#timer-view) { padding: 1.75rem 2rem; }
+.app > section:not(#timer-view) { padding: 1rem var(--page-padding); }
 .app > #tasks-view { padding-bottom: calc(var(--task-entry-height) + 1.5rem); }
 .app > #themes-view { padding-bottom: calc(var(--theme-entry-height) + 1.5rem); }
 #primary-nav { position: fixed; z-index: 10; bottom: 0; left: 50%; transform: translateX(-50%); width: min(100%, var(--app-max-width)); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; padding: 0.375rem 0.375rem calc(0.375rem + env(safe-area-inset-bottom)); border-top: 0.0625rem solid var(--color-line); background: var(--color-surface); }
-#primary-nav button { display: flex; justify-content: center; align-items: center; gap: 0.75rem; min-width: 0; min-height: 3.9375rem; padding: 0.5rem 0.25rem; border: 0; border-radius: 1rem; background: transparent; color: var(--color-text); font-size: 1.3rem; font-weight: 500; }
+#primary-nav button { display: flex; justify-content: center; align-items: center; gap: 0.5rem; min-width: 0; min-height: 2.75rem; padding: 0.5rem 0.25rem; border: 0; border-radius: 1rem; background: transparent; color: var(--color-text); font-size: 1rem; font-weight: 500; }
 #primary-nav button:hover { background: var(--color-hover); }
-#primary-nav .icon { width: 1.875rem; height: 1.875rem; stroke-width: 1.6; }
+#primary-nav .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.6; }
 #primary-nav button[aria-current="page"] { background: var(--color-selection); }
 .timer-layout { display: grid; grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-height: calc(100vh - var(--primary-nav-height)); min-height: calc(100dvh - var(--primary-nav-height)); }
 .timer-layout > div { min-width: 0; }
 .timer-layout[data-running="true"] { grid-template-areas: "timer"; grid-template-columns: minmax(0, 1fr); }
-.timer-face { grid-area: timer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2.375rem 1.875rem; text-align: center; }
-.active-task-summary { width: 100%; margin: 0 0 1.5rem; }
+.timer-face { grid-area: timer; display: flex; flex-direction: column; align-items: center; justify-content: safe center; height: calc(100dvh - var(--primary-nav-height)); overflow: auto; padding: clamp(.5rem, 2dvh, 2rem) clamp(.75rem, 2vw, 1.5rem); text-align: center; }
+.active-task-summary, #idle-task-title, .timer-controls, .timer-logged, #status { flex-shrink: 0; }
+.active-task-summary { width: 100%; margin: 0 0 clamp(.5rem, 1.6dvh, 1.5rem); }
 .active-task-summary:has(#active-task-name[hidden]) { display: none; }
-#active-task-name, #idle-task-title { display: block; width: 100%; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0.5rem; background: transparent; font-size: 2.5rem; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
-#idle-task-title { margin-bottom: 1.5rem; }
+#active-task-name, #idle-task-title { display: block; width: 100%; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0.5rem; background: transparent; font-size: clamp(1.5rem, 3vw, 1.875rem); font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+#idle-task-title { margin-bottom: clamp(.5rem, 1.6dvh, 1.5rem); }
 #active-task-name:hover { color: var(--color-primary); background: transparent; text-decoration: none; }
 #active-task-hint { max-height: 3em; white-space: pre-wrap; overflow: auto; margin: 0.5rem auto 0; max-width: 42ch; overflow-wrap: anywhere; }
-.timer-dial { position: relative; width: min(100%, 32rem); aspect-ratio: 1; container-type: inline-size; flex-shrink: 0; }
+/* Reserve space for the actual title/notes and controls; only the circle yields height. */
+.timer-dial-space { display: grid; place-items: center; width: 100%; flex: 0 1 var(--timer-diameter); min-height: 10rem; container-type: size; }
+.timer-dial { position: relative; width: min(100cqi, 100cqb, var(--timer-diameter)); aspect-ratio: 1; container-type: inline-size; }
 .timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke-width: 3.2; transform: rotate(-90deg); }
 .timer-ring-track { stroke: var(--color-ring-track); }
 #timer-ring-remaining { stroke: var(--color-accent); }
@@ -259,20 +266,21 @@ dialog h2 { margin-top: 0; }
 #clock { width: 100%; margin: 0; font-size: 24cqi; font-weight: 650; letter-spacing: -.055em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--color-primary); }
 #clock.has-hours { font-size: 17cqi; }
 .is-rest #clock { color: var(--color-rest); }
-.timer-controls { display: grid; grid-template-columns: 2.75rem auto 2.75rem; align-items: center; justify-content: center; gap: 1.375rem; margin-top: 1.5rem; }
-#main-action { grid-column: 2; width: 6.75rem; height: 6.75rem; padding: 0; border: 0; border-radius: 50%; background: var(--color-primary); color: var(--color-on-primary); }
+.timer-controls { display: grid; grid-template-columns: 3rem var(--timer-action-size) 3rem; align-items: center; justify-content: center; gap: .75rem; margin-top: clamp(.5rem, 2dvh, 1.5rem); }
+#main-action { grid-column: 2; width: var(--timer-action-size); height: var(--timer-action-size); padding: 0; border: 0; border-radius: 50%; background: var(--color-primary); color: var(--color-on-primary); }
 #main-action:hover { background: var(--color-text); }
 #main-action .icon { width: 46%; height: 46%; }
 #skip, #end { background: transparent; color: var(--color-primary); }
-.timer-logged { display: flex; align-items: center; gap: 0.75rem; margin-top: 1.125rem; color: var(--color-primary); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
-.timer-logged .icon { width: 1.875rem; height: 1.875rem; stroke-width: 1.6; }
+#skip .icon, #end .icon { width: 2rem; height: 2rem; }
+.timer-logged { display: flex; align-items: center; gap: 0.5rem; margin-top: .5rem; color: var(--color-primary); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.timer-logged .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.6; }
 #status { max-width: 42ch; margin: 0.75rem 0 0; }
-#active-task-panel { grid-area: tasks; min-height: 0; padding: 2.625rem 1.25rem 1.75rem; border-right: 0.0625rem solid var(--color-border); background: var(--color-sidebar); }
+#active-task-panel { grid-area: tasks; min-height: 0; padding: clamp(1rem, 3dvh, 2rem) clamp(.5rem, 1.6vw, 1rem) 1rem; border-right: 0.0625rem solid var(--color-border); background: var(--color-sidebar); }
 #active-task-panel { display: flex; flex-direction: column; gap: 0; height: calc(100dvh - var(--primary-nav-height)); min-height: 18rem; position: sticky; top: 0; }
 #task-picker-list { flex: 0 1 auto; min-height: 3.5rem; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0; scrollbar-gutter: stable; }
 #task-picker-list li { padding: 0; border-bottom: 0.0625rem solid var(--color-line); }
 #task-picker-list li:has([aria-pressed="true"]) { border-color: transparent; border-radius: 1rem; background: var(--color-surface); }
-#task-picker-list .task-pick { position: relative; min-height: 4rem; padding: 0.875rem 0.75rem; background: transparent; font-size: 1.4rem; font-weight: 500; border-radius: 1rem; }
+#task-picker-list .task-pick { position: relative; min-height: 3rem; padding: 0.625rem 0.5rem; background: transparent; font-size: 1rem; font-weight: 500; border-radius: 1rem; }
 #task-picker-list .task-pick[aria-pressed="true"] { background: var(--color-surface); font-weight: 650; opacity: 1; }
 #task-picker-list .task-pick:hover { background: var(--color-surface); }
 #task-picker-list .task-drag-handle { opacity: .5; }
@@ -282,12 +290,12 @@ dialog h2 { margin-top: 0; }
 #timer-quick-task-form button { order: -1; padding: 0; width: 2.375rem; min-width: 2.375rem; min-height: 2.875rem; border: 0; background: transparent; font-size: 1.6rem; color: var(--color-primary); }
 
 /* Settings follow the same palette and type as Timer. */
-.settings-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; padding: 0.625rem 0; }
+.settings-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--page-padding); padding: 0.625rem 0; }
 .settings-column { min-width: 0; }
-.settings-column + .settings-column { border-left: 0.0625rem solid var(--color-border); padding-left: 2rem; }
+.settings-column + .settings-column { border-left: 0.0625rem solid var(--color-border); padding-left: var(--page-padding); }
 .settings-section { padding: 1.375rem 0 1.75rem; }
 .settings-section + .settings-section { border-top: 0.0625rem solid var(--color-border); }
-.settings-section h2 { min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1.375rem; font-size: 2rem; font-weight: 650; }
+.settings-section h2 { min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1.375rem; font-size: 1.5rem; font-weight: 650; }
 .settings-section h2 .icon { width: 2.25rem; height: 2.25rem; stroke-width: 1.6; }
 .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .settings-heading h2 { margin-bottom: 0; }
@@ -353,10 +361,26 @@ dialog h2 { margin-top: 0; }
 #settings-view .step-minutes input::-webkit-inner-spin-button,
 #settings-view .step-minutes input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 
-/* At compact widths, only navigation labels change; the page columns stay in place. */
+/* Compact windows retain readable type and the existing column arrangement.
+   Reduce spacing and chart height instead of scaling down the whole interface. */
 @media (max-width: 719px) {
   #primary-nav { padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
-  #primary-nav button { min-height: 32px; padding: 4px; }
+  #primary-nav button { min-height: 2.75rem; padding: .25rem; }
   #primary-nav button > span { display: none; }
-  #primary-nav .icon { width: 20px; height: 20px; }
+  .review-overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); margin: 1rem 0 1.5rem; }
+  .growth-summary { padding-right: .5rem; }
+  .period-navigation { gap: .5rem; margin-bottom: 1rem; }
+  .period-chart-layout { gap: .375rem; padding: .5rem 0 0 .5rem; }
+  .period-axis, .period-bar-track { height: 7rem; }
+  .period-chart { height: 9rem; gap: .125rem; padding-inline: 0; }
+  #day-untimed { margin: -1rem 0 1rem; }
+  #record-list .record-row { grid-template-columns: 10ch 2.75rem minmax(0, 1fr) max-content; }
+  .theme-card-grid { gap: .75rem; }
+  .theme-card-title, .theme-card-chart { padding-inline: .75rem; }
+  #settings-view .sound-field { grid-template-columns: minmax(0, 1fr) auto; gap: .25rem .5rem; }
+  #settings-view .sound-field label { grid-column: 1; grid-row: 1; }
+  #settings-view .sound-field output { grid-column: 2; grid-row: 1; }
+  #settings-view .sound-field input { grid-column: 1 / -1; grid-row: 2; }
+  #settings-view .sound-preview, .backup-main-actions { grid-template-columns: minmax(0, 1fr); }
+  #settings-view .sound-preview button { min-height: 2.75rem; font-size: 1rem; }
 }
