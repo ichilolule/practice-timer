@@ -1708,8 +1708,6 @@ load();
 if (desktop) {
   document.title = 'Practice Timer · desktop beta';
   $('desktop-label').textContent = 'Desktop beta';
-  $('desktop-settings-title').textContent = 'Desktop beta';
-  $('desktop-settings').setAttribute('aria-label', 'Desktop beta');
   $('desktop-banner').hidden = false;
   $('desktop-settings').hidden = false;
   let desktopSettings;
@@ -1774,11 +1772,18 @@ if (window.ResizeObserver) {
     'theme-add': '--theme-entry-height',
     'primary-nav': '--primary-nav-height',
   };
+  const measuredHeights = new Map();
   const fixedControls = new window.ResizeObserver(entries => {
-    for (const { target } of entries) {
-      const height = target.getBoundingClientRect().height;
-      if (height > 0) document.documentElement.style.setProperty(
-        heightProperties[target.id], `${height}px`);
+    // Use the observer's completed measurements, and finish all fallback reads before writes.
+    const updates = entries.map(entry => ({
+      property: heightProperties[entry.target.id],
+      height: entry.borderBoxSize?.[0]?.blockSize ?? entry.borderBoxSize?.blockSize ?? entry.target.getBoundingClientRect().height,
+    }));
+    for (const { property, height } of updates) {
+      if (height > 0 && height !== measuredHeights.get(property)) {
+        measuredHeights.set(property, height);
+        document.documentElement.style.setProperty(property, `${height}px`);
+      }
     }
   });
   fixedControls.observe($('quick-task-form'), { box: 'border-box' });

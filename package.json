@@ -1,7 +1,7 @@
 {
   "name": "practice-timer-desktop",
   "productName": "Practice Timer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal Practice Timer desktop beta",
   "private": true,
   "main": "desktop/main.cjs",

@@ -8,11 +8,11 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
   <link rel="manifest" href="./manifest.json">
-  <link rel="stylesheet" href="styles.css?rev=54e0dfa65e">
+  <link rel="stylesheet" href="styles.css?rev=ace5c5f833">
   <script defer src="timer-core.js?rev=6f27a71c5e"></script>
   <script defer src="practice-data.js?rev=62c8cf32cb"></script>
   <script defer src="backup-files.js?rev=7871524515"></script>
-  <script defer src="app.js?rev=011c229160"></script>
+  <script defer src="app.js?rev=b391be228e"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -167,17 +167,6 @@
       <h1 class="sr-only">Practice timer</h1>
       <div class="settings-columns">
         <div class="settings-column">
-          <section id="desktop-settings" class="settings-section" aria-label="Desktop" hidden>
-            <h2 id="desktop-settings-title">Desktop</h2>
-            <p class="subtle">Closing this window keeps the timer in the menu bar. Quit from the menu to exit. Reopening restores the timer paused.</p>
-            <div class="desktop-shortcuts">
-              <label>Start / pause / resume<input id="desktop-shortcut-toggle" type="text" readonly aria-describedby="desktop-shortcut-help"></label>
-              <label>End session<input id="desktop-shortcut-end" type="text" readonly aria-describedby="desktop-shortcut-help"></label>
-            </div>
-            <p id="desktop-shortcut-help" class="subtle">Select a field and press a key combination. Shortcuts work while using other apps.</p>
-            <button id="desktop-shortcut-reset" type="button">Reset shortcuts</button>
-            <p id="desktop-shortcut-status" role="status" aria-live="polite"></p>
-          </section>
           <section class="settings-section routine-section" aria-label="Routine">
             <h2><svg class="icon" aria-hidden="true"><use href="#icon-routine"/></svg>Routine</h2>
             <div class="routine-steps">
@@ -193,6 +182,15 @@
               <input id="day-start" type="time" step="60" value="05:00" required>
             </div>
             <p id="day-start-error" role="alert"></p>
+          </section>
+          <section id="desktop-settings" class="settings-section" aria-label="Shortcut keys" hidden>
+            <h2 id="desktop-settings-title">Shortcut keys</h2>
+            <div class="desktop-shortcuts">
+              <label>Start / pause / resume<input id="desktop-shortcut-toggle" type="text" readonly></label>
+              <label>End session<input id="desktop-shortcut-end" type="text" readonly></label>
+            </div>
+            <button id="desktop-shortcut-reset" type="button">Reset shortcuts</button>
+            <p id="desktop-shortcut-status" role="status" aria-live="polite"></p>
           </section>
         </div>
         <div class="settings-column">

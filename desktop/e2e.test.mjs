@@ -64,6 +64,9 @@ test('desktop beta: native menus, hidden timing, shortcuts, backups, suspend, re
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true);
   await command(app, 'settings');
   await page.waitForSelector('#desktop-settings:visible');
+  assert.equal(await page.locator('#desktop-settings-title').textContent(), 'Shortcut keys');
+  assert.equal(await page.locator('#desktop-shortcut-help').count(), 0);
+  assert.equal(await page.locator('.settings-column').first().locator('.settings-section').last().getAttribute('id'), 'desktop-settings');
   const shortcuts = { toggle: 'Control+Alt+Shift+F11', end: 'Control+Alt+Shift+F12' };
   const result = await page.evaluate(value => practiceDesktop.setShortcuts(value), shortcuts);
   assert.equal(result.ok, true);

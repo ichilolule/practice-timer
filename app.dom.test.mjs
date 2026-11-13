@@ -153,10 +153,11 @@ test('自動保存へタスク・設定変更を伝え、計測途中のJSONも�
 test('下部の入力欄が折り返しても末尾用の余白を追従させ、非表示時の高さは採用しない', () => {
   let resize;
   const measured = new Map();
+  const updates = [];
   const observed = [];
   const storage = new Map();
   const app = mount(storage, undefined, 1_000_000, context => {
-    context.document.documentElement = { style: { setProperty: (key, value) => measured.set(key, value) } };
+    context.document.documentElement = { style: { setProperty: (key, value) => { measured.set(key, value); updates.push([key, value]); } } };
     context.window.ResizeObserver = class {
       constructor(callback) { resize = callback; }
       observe(element) { observed.push(element); }
@@ -174,6 +175,16 @@ test('下部の入力欄が折り返しても末尾用の余白を追従させ�
   assert.equal(measured.get('--task-entry-height'), '113px');
   assert.equal(measured.get('--theme-entry-height'), '100px');
   assert.equal(measured.get('--primary-nav-height'), '90px');
+  const count = updates.length;
+  const measuredEntry = (id, height) => ({
+    target: { id, getBoundingClientRect() { throw new Error('Do not force a layout when the observer has a measurement.'); } },
+    borderBoxSize: [{ blockSize: height }],
+  });
+  resize([measuredEntry('primary-nav', 90), measuredEntry('quick-task-form', 113)]);
+  assert.equal(updates.length, count);
+  resize([measuredEntry('quick-task-form', 130)]);
+  assert.equal(updates.length, count + 1);
+  assert.equal(measured.get('--task-entry-height'), '130px');
   assert.equal(storage.size, 0);
 });
 
