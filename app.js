@@ -1176,7 +1176,7 @@ function validateBackup(raw) {
   if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== 1 ||
       !Array.isArray(raw.steps) || !Array.isArray(raw.tasks) ||
       !Array.isArray(raw.groups) || !Array.isArray(raw.sessions)) {
-    throw new Error('This is not a supported Practice timer beta backup.');
+    throw new Error('This is not a supported Practice timer backup.');
   }
   const restoredSteps = raw.steps.length ? normalizeSteps(raw.steps, { requireBoth: false }) : [];
   const ids = new Set();

@@ -518,7 +518,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   assert.match(html, /<script defer src="practice-data\.js\?rev=[a-f0-9]+"><\/script>/);
   assert.match(html, /<script defer src="app\.js\?rev=[a-f0-9]+"><\/script>/);
   assert.doesNotMatch(html, /type="module"/);
-  assert.match(html, /class="beta">beta<\/span>/);
+  assert.doesNotMatch(html, /\bbeta\b/i);
   assert.doesNotMatch(html, /id="sound-test"/);
 
   const { elements, storage } = mount();
