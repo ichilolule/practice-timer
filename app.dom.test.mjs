@@ -33,7 +33,10 @@ class Element {
   setPointerCapture() {}
   hasPointerCapture() { return false; }
   getBoundingClientRect() { return this.bounds || { top: 0, bottom: 400, left: 0, right: 300, height: 400 }; }
-  closest() { return this.getAttribute('data-task-id') ? this : this.parentElement?.closest(); }
+  closest(selector) {
+    const attribute = selector === '[data-step-index]' ? 'data-step-index' : 'data-task-id';
+    return this.getAttribute(attribute) != null ? this : this.parentElement?.closest(selector);
+  }
   get lastElementChild() { return this.children.at(-1); }
   querySelector(tag) {
     for (const child of this.children) {
@@ -334,6 +337,87 @@ test('下部の設定から別の画面へ移動しても入力を保ち、キ�
   await elements.get('cancel-settings').trigger('click');
   await elements.get('settings-toggle').trigger('click');
   assert.equal(elements.get('step-list').children[0].querySelector('input').value, 25);
+});
+
+test('Routineは編集中の値を保ってドラッグ・上下キーで並べ替え、保存後の工程順とJSONへ反映する', async () => {
+  const original = [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }, { type: 'work', minutes: 10 }];
+  const storage = new Map([['practice-timer-v1', JSON.stringify({ steps: original, totalWorkMs: 0 })]]);
+  const app = mount(storage);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  const list = elements.get('step-list');
+  const values = () => list.children.map(row => [row.querySelector('select').value, Number(row.querySelector('input').value)]);
+  const input = list.children[0].querySelector('input');
+  input.value = '35';
+  await input.trigger('input');
+  const handle = list.children[0].querySelector('button');
+  const target = list.children[2];
+  target.bounds = { top: 120, height: 48 };
+  const pointer = { button: 0, isPrimary: true, pointerId: 1, clientX: 20, clientY: 10 };
+  await handle.trigger('pointerdown', pointer);
+  app.hit(target.querySelector('input'));
+  await handle.trigger('pointermove', { ...pointer, clientY: 160 });
+  await handle.trigger('pointerup', { ...pointer, clientY: 160 });
+  assert.deepEqual(values(), [['rest', 5], ['work', 10], ['work', 35]]);
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, original);
+  assert.equal(list.children[2].querySelector('button').focusOptions.preventScroll, true);
+  await list.children[1].querySelector('button').trigger('keydown', { key: 'ArrowUp' });
+  assert.deepEqual(values(), [['work', 10], ['rest', 5], ['work', 35]]);
+  await elements.get('nav-tasks').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  assert.deepEqual(values(), [['work', 10], ['rest', 5], ['work', 35]]);
+  await elements.get('save-settings').trigger('click');
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps,
+    [{ type: 'work', minutes: 10 }, { type: 'rest', minutes: 5 }, { type: 'work', minutes: 35 }]);
+  await elements.get('main-action').trigger('click');
+  assert.equal(elements.get('clock').textContent, '10:00');
+  await elements.get('skip').trigger('click');
+  assert.equal(elements.get('clock').textContent, '05:00');
+  await elements.get('skip').trigger('click');
+  assert.equal(elements.get('clock').textContent, '35:00');
+  const restored = mount(storage);
+  await restored.elements.get('backup-save').trigger('click');
+  const backup = JSON.parse(await restored.exportedBlob.text());
+  assert.deepEqual(backup.steps, JSON.parse(storage.get('practice-timer-v1')).steps);
+});
+
+test('Routineのドラッグ中止・微小移動・タブ移動では順序を変えず、Cancelで保存済みの順序へ戻せる', async () => {
+  const original = [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }];
+  const storage = new Map([['practice-timer-v1', JSON.stringify({ steps: original, totalWorkMs: 0 })]]);
+  const app = mount(storage);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  const list = elements.get('step-list');
+  const handle = list.children[0].querySelector('button');
+  const target = list.children[1];
+  target.bounds = { top: 60, height: 48 };
+  const pointer = { button: 0, pointerId: 1, clientX: 20, clientY: 10 };
+  app.hit(target);
+  for (const cancel of ['pointercancel', 'lostpointercapture', 'Escape', 'tab']) {
+    await handle.trigger('pointerdown', pointer);
+    await handle.trigger('pointermove', { ...pointer, clientY: 100 });
+    if (cancel === 'Escape') await handle.trigger('keydown', { key: 'Escape' });
+    else if (cancel === 'tab') await elements.get('nav-tasks').trigger('click');
+    else await handle.trigger(cancel, pointer);
+    await handle.trigger('pointerup', { ...pointer, clientY: 100 });
+    assert.equal(list.children[0].querySelector('input').value, 25);
+  }
+  await handle.trigger('pointerdown', pointer);
+  await handle.trigger('pointermove', { ...pointer, clientY: 12 });
+  await handle.trigger('pointerup', { ...pointer, clientY: 12 });
+  assert.equal(list.children[0].querySelector('input').value, 25);
+  await elements.get('settings-toggle').trigger('click');
+  await list.children[0].querySelector('button').trigger('keydown', { key: 'ArrowDown' });
+  assert.equal(list.children[0].querySelector('input').value, 5);
+  await elements.get('cancel-settings').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(list.children[0].querySelector('input').value, 25);
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, original);
+  const remove = buttonNamed(list.children[0], '×');
+  assert.equal(remove.getAttribute('aria-label'), 'Delete step 1');
+  await remove.trigger('click');
+  assert.equal(list.children.length, 1);
+  assert.equal(list.children[0].querySelector('input').value, 5);
 });
 
 test('通常の開始説明を省き、音の失敗は工程移行後も残し、再読込は停止アイコンで示す', async () => {

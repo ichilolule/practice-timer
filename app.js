@@ -22,6 +22,7 @@ let sessions = [];
 let selectedTaskId = null;
 let editingTaskId = null;
 let taskDrag = null;
+let stepDrag = null;
 let taskPickerScrollTop = 0;
 let taskEditorSource = null;
 let taskUndo = null;
@@ -199,6 +200,7 @@ function renderTaskPicker() {
 
 function switchView(name) {
   cancelTaskDrag();
+  cancelStepDrag();
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) $(`${view}-view`).hidden = view !== name;
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) {
     const button = view === 'settings' ? $('settings-toggle') : $(`nav-${view}`);
@@ -217,7 +219,7 @@ function typeField(value, index) {
   const label = document.createElement('span'); label.className = 'sr-only'; label.textContent = 'Type';
   wrapper.append(label);
   const select = document.createElement('select');
-  for (const [text, optionValue] of [['Choose', ''], ['Work', 'work'], ['Break', 'rest']]) {
+  for (const [text, optionValue] of [['Type', ''], ['Work', 'work'], ['Break', 'rest']]) {
     const option = document.createElement('option');
     option.textContent = text;
     option.value = optionValue;
@@ -280,24 +282,96 @@ function moveRow(from, to) {
   const [row] = draft.splice(from, 1);
   draft.splice(to, 0, row);
   renderSettings();
+  $('step-list').children[to]?.querySelector('button')?.focus({ preventScroll: true });
+}
+
+function cancelStepDrag() {
+  const drag = stepDrag;
+  if (!drag) return;
+  stepDrag = null;
+  globalThis.cancelAnimationFrame?.(drag.frame);
+  drag.item.classList.toggle('step-dragging', false);
+  drag.target?.classList.toggle('step-drop-before', false);
+  drag.target?.classList.toggle('step-drop-after', false);
+  if (drag.handle.hasPointerCapture?.(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+}
+
+function updateStepDrop(drag) {
+  drag.target?.classList.toggle('step-drop-before', false);
+  drag.target?.classList.toggle('step-drop-after', false);
+  const target = document.elementFromPoint(drag.x, drag.y)?.closest('[data-step-index]');
+  drag.target = target?.parentElement === $('step-list') && target !== drag.item ? target : null;
+  if (!drag.target) return;
+  const bounds = drag.target.getBoundingClientRect();
+  drag.after = drag.y >= bounds.top + bounds.height / 2;
+  drag.target.classList.toggle(drag.after ? 'step-drop-after' : 'step-drop-before', true);
+}
+
+function stepDragHandle(item, index) {
+  const handle = rowButton('⠿', `Reorder step ${index + 1} (drag or use arrow keys)`, () => {});
+  handle.className = 'step-drag-handle';
+  handle.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { cancelStepDrag(); return; }
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    moveRow(index, index + (event.key === 'ArrowUp' ? -1 : 1));
+  });
+  handle.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    cancelStepDrag();
+    stepDrag = { handle, item, index, pointerId: event.pointerId, active: false,
+      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY };
+    handle.setPointerCapture(event.pointerId);
+  });
+  handle.addEventListener('pointermove', event => {
+    const drag = stepDrag;
+    if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    if (!drag.active && Math.hypot(drag.x - drag.startX, drag.y - drag.startY) < 6) return;
+    event.preventDefault();
+    if (!drag.active) {
+      drag.active = true;
+      item.classList.toggle('step-dragging', true);
+      const scroll = () => {
+        if (stepDrag !== drag) return;
+        if (drag.y < 48) window.scrollBy?.(0, -12);
+        else if (drag.y > window.innerHeight - 48) window.scrollBy?.(0, 12);
+        updateStepDrop(drag);
+        drag.frame = globalThis.requestAnimationFrame?.(scroll);
+      };
+      drag.frame = globalThis.requestAnimationFrame?.(scroll);
+    }
+    updateStepDrop(drag);
+  });
+  handle.addEventListener('pointerup', event => {
+    const drag = stepDrag;
+    if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
+    if (drag.active) { drag.x = event.clientX; drag.y = event.clientY; updateStepDrop(drag); }
+    const target = drag.active ? drag.target : null;
+    const targetIndex = target ? Number(target.getAttribute('data-step-index')) : index;
+    const to = target ? targetIndex + Number(drag.after) - Number(targetIndex > index) : index;
+    cancelStepDrag();
+    moveRow(index, to);
+  });
+  for (const type of ['pointercancel', 'lostpointercapture']) handle.addEventListener(type, () => {
+    if (stepDrag?.handle === handle) cancelStepDrag();
+  });
+  return handle;
 }
 
 function renderSettings() {
+  cancelStepDrag();
   const list = $('step-list');
   list.replaceChildren();
   draft.forEach((step, index) => {
     const item = document.createElement('li');
+    item.setAttribute('data-step-index', String(index));
     const row = document.createElement('div');
     row.className = 'step-row';
-    row.append(typeField(step.type, index), numberField(step.minutes, index));
-    const controls = document.createElement('div');
-    controls.className = 'step-controls';
-    controls.append(
-      rowButton('↑', `Move step ${index + 1} up`, () => moveRow(index, index - 1), index === 0),
-      rowButton('↓', `Move step ${index + 1} down`, () => moveRow(index, index + 1), index === draft.length - 1),
-      rowButton('Delete', `Delete step ${index + 1}`, () => { draft.splice(index, 1); renderSettings(); }),
-    );
-    row.append(controls);
+    const remove = rowButton('×', `Delete step ${index + 1}`, () => { draft.splice(index, 1); renderSettings(); });
+    remove.className = 'step-delete';
+    row.append(stepDragHandle(item, index), typeField(step.type, index), numberField(step.minutes, index), remove);
     item.append(row);
     list.append(item);
   });
