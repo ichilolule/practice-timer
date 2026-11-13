@@ -51,7 +51,6 @@
             <button id="active-task-name" type="button" aria-label="Edit selected task" hidden></button>
             <p id="active-task-hint" class="subtle" hidden></p>
           </div>
-          <h2 id="idle-task-title">Practice timer</h2>
           <div class="timer-dial-space">
             <div id="timer-dial" class="timer-dial">
               <svg class="timer-ring" viewBox="0 0 100 100" aria-hidden="true">
@@ -183,6 +182,16 @@
             </div>
             <p id="day-start-error" role="alert"></p>
           </section>
+        </div>
+        <div class="settings-column">
+          <section class="settings-section" aria-label="Notifications">
+            <div class="settings-heading">
+              <h2><svg class="icon" aria-hidden="true"><use href="#icon-bell"/></svg>Notifications</h2>
+              <span id="notification-state" class="notification-state" role="status">Off</span>
+            </div>
+            <button id="permission" type="button">Enable notifications</button>
+            <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
+          </section>
           <section class="settings-section" aria-label="Sound">
             <h2><svg class="icon" aria-hidden="true"><use href="#icon-sound"/></svg>Sound</h2>
             <div class="sound-settings">
@@ -200,16 +209,6 @@
               </div>
             </div>
             <p id="sound-status" role="alert"></p>
-          </section>
-        </div>
-        <div class="settings-column">
-          <section class="settings-section" aria-label="Notifications">
-            <div class="settings-heading">
-              <h2><svg class="icon" aria-hidden="true"><use href="#icon-bell"/></svg>Notifications</h2>
-              <span id="notification-state" class="notification-state" role="status">Off</span>
-            </div>
-            <button id="permission" type="button">Enable notifications</button>
-            <p id="permission-status" class="subtle" role="status" aria-live="polite"></p>
           </section>
           <section class="settings-section" aria-label="Backup">
             <h2><svg class="icon" aria-hidden="true"><use href="#icon-backup"/></svg>Backup</h2>

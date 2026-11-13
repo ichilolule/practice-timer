@@ -136,7 +136,6 @@ function renderTaskChoice(rebuildPicker = true) {
   $('active-task-name').textContent = task?.title || '';
   $('active-task-name').title = task?.title || '';
   $('active-task-name').hidden = !task;
-  $('idle-task-title').hidden = Boolean(task);
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;

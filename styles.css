@@ -237,11 +237,10 @@ dialog h2 { margin-top: 0; }
 .timer-layout > div { min-width: 0; }
 .timer-layout[data-running="true"] { grid-template-areas: "timer"; grid-template-columns: minmax(0, 1fr); }
 .timer-face { grid-area: timer; display: flex; flex-direction: column; align-items: center; justify-content: safe center; height: calc(100dvh - var(--primary-nav-height)); overflow: auto; padding: clamp(.5rem, 2dvh, 2rem) clamp(.75rem, 2vw, 1.5rem); text-align: center; }
-.active-task-summary, #idle-task-title, .timer-controls, .timer-logged, #status { flex-shrink: 0; }
+.active-task-summary, .timer-controls, .timer-logged, #status { flex-shrink: 0; }
 .active-task-summary { width: 100%; margin: 0 0 clamp(.5rem, 1.6dvh, 1.5rem); }
 .active-task-summary:has(#active-task-name[hidden]) { display: none; }
-#active-task-name, #idle-task-title { display: block; width: 100%; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0.5rem; background: transparent; font-size: clamp(1.5rem, 3vw, 1.875rem); font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
-#idle-task-title { margin-bottom: clamp(.5rem, 1.6dvh, 1.5rem); }
+#active-task-name { display: block; width: 100%; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0.5rem; background: transparent; font-size: clamp(1.5rem, 3vw, 1.875rem); font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
 #active-task-name:hover { color: var(--color-primary); background: transparent; text-decoration: none; }
 #active-task-hint { max-height: 3em; white-space: pre-wrap; overflow: auto; margin: 0.5rem auto 0; max-width: 42ch; overflow-wrap: anywhere; }
 /* Reserve space for the actual title/notes and controls; only the circle yields height. */
