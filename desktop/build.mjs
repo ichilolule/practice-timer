@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { flipFuses, FuseVersion, FuseV1Options } from '@electron/fuses';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const dist = path.join(root, 'dist');
@@ -42,6 +43,16 @@ try {
       NSQuitAlwaysKeepsWindows: false },
   });
   const next = path.join(output, 'Practice Timer.app');
+  await flipFuses(next, {
+    version: FuseVersion.V1,
+    resetAdHocDarwinSignature: true,
+    [FuseV1Options.RunAsNode]: false,
+    [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+    [FuseV1Options.EnableNodeCliInspectArguments]: false,
+    [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+    [FuseV1Options.OnlyLoadAppFromAsar]: true,
+    [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
+  });
   // Keep the previous bundle recoverable until the new one has been copied successfully.
   const staged = path.join(dist, '.Practice Timer.pending.app');
   await rm(staged, { recursive: true, force: true });

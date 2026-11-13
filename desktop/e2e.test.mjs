@@ -6,17 +6,17 @@ import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import http from 'node:http';
 
 const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL('../', import.meta.url));
-const executablePath = process.env.PRACTICE_TIMER_TEST_APP || require('electron');
-const packaged = Boolean(process.env.PRACTICE_TIMER_TEST_APP);
+const executablePath = require('electron');
 const fixture = { format: 'practice-timer-beta', version: 1,
   steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }],
   tasks: [], groups: [], sessions: [], run: null, totalWorkMs: 0, sound: { volume: 0, pitch: 0 } };
 
 async function launch(directory) {
-  return electron.launch({ executablePath, args: packaged ? [] : [root],
+  return electron.launch({ executablePath, args: [root],
     env: { ...process.env, PRACTICE_TIMER_DATA_DIR: directory }, timeout: 30_000 });
 }
 async function command(app, type, extra = {}) {
@@ -209,4 +209,53 @@ test('hidden phase changes and quitting a running timer preserve elapsed work', 
   assert.equal(saved.run.phase, 'rest');
   assert.equal(saved.run.totalWorkMs, 6000);
   assert.equal(saved.run.sessionWorkMs, 6000);
+});
+
+test('desktop security: imported markup, denied browser permissions, foreign windows and outside requests', { timeout: 45_000 }, async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-security-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const payload = '<img src=x onerror="window.__injected=true">';
+  const initial = { ...fixture, tasks: [{ id: 'security-task', title: payload, firstStep: '', targetId: null, completedAt: null }] };
+  await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify(initial));
+  const app = await launch(directory);
+  t.after(() => app.close().catch(() => {}));
+  const page = await app.firstWindow();
+  await page.waitForSelector('#desktop-banner:visible');
+  assert.ok((await page.locator('#task-picker-list').textContent()).includes(payload));
+  assert.equal(await page.locator('#task-picker-list img').count(), 0);
+  assert.equal(await page.evaluate(() => window.__injected), undefined);
+  const permissions = await page.evaluate(async () => Promise.all(
+    ['clipboard-read', 'geolocation', 'camera', 'microphone'].map(async name => (await navigator.permissions.query({ name })).state)));
+  assert.deepEqual(permissions, ['denied', 'denied', 'denied', 'denied']);
+  await assert.rejects(page.evaluate(() => practiceDesktop.readBackup('../../unrelated-file')), /Choose this backup destination again/);
+
+  let requests = 0;
+  const outside = http.createServer((_request, response) => { requests++; response.end('Untrusted test page'); });
+  await new Promise(resolve => outside.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => outside.close(resolve)));
+  const outsideURL = `http://127.0.0.1:${outside.address().port}/`;
+  const ownURL = page.url();
+  assert.equal(await page.evaluate(async url => { try { await fetch(url); return true; } catch { return false; } }, outsideURL), false);
+  await page.evaluate(url => { window.location.href = url; window.open(url); }, outsideURL);
+  await page.waitForTimeout(150);
+  assert.equal(page.url(), ownURL);
+  assert.equal(app.windows().length, 1);
+  assert.equal(requests, 0);
+
+  const foreignWindow = app.waitForEvent('window');
+  await app.evaluate(async ({ BrowserWindow }, { url, preload }) => {
+    const foreign = new BrowserWindow({ show: false, webPreferences: {
+      preload, sandbox: true, contextIsolation: true, nodeIntegration: false,
+    } });
+    await foreign.loadURL(url);
+  }, { url: ownURL, preload: path.join(root, 'desktop/preload.cjs') });
+  const foreign = await foreignWindow;
+  await foreign.waitForSelector('#desktop-banner:visible');
+  assert.equal((await foreign.evaluate(() => practiceDesktop.loadState())).ok, false);
+  assert.equal((await foreign.evaluate(value => practiceDesktop.saveState(value), JSON.stringify(initial))).ok, false);
+  await assert.rejects(foreign.evaluate(() => practiceDesktop.readBackupTargets()), /Untrusted request/);
+  await assert.rejects(foreign.evaluate(() => practiceDesktop.settings()), /Untrusted request/);
+  await foreign.close();
+  assert.equal((await state(page)).tasks[0].title, payload);
+  await quit(app);
 });

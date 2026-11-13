@@ -13,7 +13,11 @@ async function serve(root) {
     if (request.headers.host !== new URL(origin).host || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(403); response.end(); return;
     }
-    const name = new URL(request.url, origin).pathname.slice(1) || 'index.html';
+    let url;
+    try { url = new URL(request.url, origin); }
+    catch { response.writeHead(400); response.end(); return; }
+    if (url.origin !== origin) { response.writeHead(400); response.end(); return; }
+    const name = url.pathname.slice(1) || 'index.html';
     if (!ASSETS.has(name)) { response.writeHead(404); response.end(); return; }
     try {
       const content = await fs.readFile(path.join(root, name));

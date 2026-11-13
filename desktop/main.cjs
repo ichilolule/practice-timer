@@ -171,6 +171,7 @@ async function start() {
   window.on('blur', () => setRecording(false));
   window.webContents.on('will-navigate', (event, url) => { if (url !== `${server.origin}/`) event.preventDefault(); });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.session.setPermissionCheckHandler(() => false);
   window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   window.webContents.on('render-process-gone', () => {
     ready = false; status = { ...status, status: 'paused' }; refreshTray();

@@ -1,7 +1,7 @@
 {
   "name": "practice-timer-desktop",
   "productName": "Practice Timer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Personal Practice Timer desktop beta",
   "private": true,
   "main": "desktop/main.cjs",
@@ -9,9 +9,11 @@
     "start": "electron .",
     "test": "node --test *.test.mjs desktop/storage.test.mjs",
     "test:desktop": "node --test desktop/e2e.test.mjs",
+    "test:release": "node --test desktop/release.test.mjs",
     "build": "node desktop/build.mjs"
   },
   "devDependencies": {
+    "@electron/fuses": "2.1.3",
     "@electron/packager": "20.3.0",
     "electron": "45.3.2",
     "playwright-core": "1.65.0"
