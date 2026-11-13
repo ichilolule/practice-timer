@@ -38,6 +38,11 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
+.desktop-banner { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .25rem 1rem; margin-bottom: .75rem; color: var(--color-muted); font-size: .875rem; }
+.desktop-banner[hidden] { display: none; }
+.desktop-shortcuts { display: grid; gap: .75rem; }
+.desktop-shortcuts label { display: grid; gap: .25rem; }
+.desktop-shortcuts input { width: 100%; padding: .5rem; border: 1px solid var(--color-border); border-radius: .375rem; cursor: pointer; }
 input, select, textarea { color: var(--color-text); background: var(--color-surface); }
 input::placeholder, textarea::placeholder { color: var(--color-muted); opacity: 1; }
 button, input, select, textarea { font: inherit; }
@@ -284,7 +289,7 @@ dialog h2 { margin-top: 0; }
 .settings-column { min-width: 0; }
 .settings-column + .settings-column { border-left: 0.0625rem solid var(--color-border); padding-left: var(--page-padding); }
 .settings-section { padding: 1.375rem 0 1.75rem; }
-.settings-section + .settings-section { border-top: 0.0625rem solid var(--color-border); }
+.settings-section:not([hidden]) ~ .settings-section { border-top: 0.0625rem solid var(--color-border); }
 .settings-section h2 { min-width: 0; overflow-wrap: anywhere; display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1.375rem; font-size: 1.5rem; font-weight: 650; }
 .settings-section h2 .icon { width: 2.25rem; height: 2.25rem; stroke-width: 1.6; }
 .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }

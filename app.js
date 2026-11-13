@@ -8,6 +8,7 @@ const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
 const DEFAULT_SOUND = { volume: 100, pitch: 0 };
 const DEFAULT_DAY_START = 5 * 60;
+const desktop = globalThis.practiceDesktop;
 // 保存値の尺度は旧版のままにして、画面の1%を従来の5%分に対応させる。
 const SOUND_VOLUME_SCALE = 5;
 const $ = (id) => document.getElementById(id);
@@ -44,7 +45,9 @@ const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.r
 
 function load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const result = desktop?.loadState();
+    if (result && !result.ok) throw new Error(result.error);
+    const saved = JSON.parse((desktop ? result.value : localStorage.getItem(STORAGE_KEY)) || '{}');
     if (saved.format === BACKUP_FORMAT) {
       ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = validateBackup(saved));
       return;
@@ -62,21 +65,40 @@ function load() {
   } catch {
     localDataReadable = false;
     $('status').textContent = 'Could not read saved data. Check Settings.';
+    if (desktop) $('desktop-save-status').textContent = 'Saved data could not be read. Import a JSON backup to restore it.';
   }
 }
 
 function persist() {
   backupFiles?.changed(JSON.stringify(currentBackup()));
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: BACKUP_FORMAT, version: 1,
+    if (desktop && !localDataReadable) throw new Error('Saved data could not be read. Import a JSON backup to restore it.');
+    const value = JSON.stringify({ format: BACKUP_FORMAT, version: 1,
       steps, run, totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
-      tasks, groups, sessions, selectedTaskId, sound: soundSettings, dayStartMinutes }));
+      tasks, groups, sessions, selectedTaskId, sound: soundSettings, dayStartMinutes });
+    if (desktop) {
+      const result = desktop.saveState(value);
+      if (!result.ok) throw new Error(result.error || 'Could not save on this Mac.');
+      $('desktop-save-status').textContent = 'Saved on this Mac';
+    } else localStorage.setItem(STORAGE_KEY, value);
     lastSaved = Date.now();
+    publishDesktop();
     return true;
-  } catch {
-    $('status').textContent = 'Could not save in this browser. Check your storage settings.';
+  } catch (error) {
+    $('status').textContent = desktop ? 'Could not save on this Mac. Export a JSON backup before quitting.'
+      : 'Could not save in this browser. Check your storage settings.';
+    if (desktop) $('desktop-save-status').textContent = error.message;
     return false;
   }
+}
+
+function publishDesktop() {
+  if (!desktop) return;
+  let canStart = false;
+  try { normalizeSteps(steps); canStart = localDataReadable; } catch {}
+  desktop.publish({ status: run?.status || 'ready', phase: run?.phase || steps[0]?.type || 'work',
+    time: timeText(run?.remainingMs ?? (steps[0]?.minutes || 0) * 60_000, true),
+    task: tasks.find(task => task.id === selectedTaskId)?.title || '', canStart });
 }
 
 function timeText(ms, roundUp = false) {
@@ -90,6 +112,7 @@ function timeText(ms, roundUp = false) {
 }
 
 function renderTimer() {
+  publishDesktop();
   const activeSteps = run?.steps ?? steps;
   const phase = run?.phase ?? activeSteps[0]?.type;
   const phaseLabel = phase === 'work' ? 'Work' : 'Break';
@@ -1253,6 +1276,14 @@ function currentBackup() {
 }
 
 function renderNotificationPermission() {
+  if (desktop) {
+    $('notification-state').textContent = 'macOS';
+    $('notification-state').setAttribute('data-state', 'system');
+    $('notification-state').setAttribute('aria-label', 'Notifications managed by macOS');
+    $('permission').hidden = true;
+    $('permission-status').textContent = 'Manage notifications in macOS System Settings.';
+    return;
+  }
   const permission = window.Notification?.permission || 'unsupported';
   const labels = { granted: 'On', default: 'Off', denied: 'Blocked', unsupported: 'Unavailable' };
   const state = $('notification-state');
@@ -1404,6 +1435,7 @@ async function previewSound(phase) {
 }
 
 function notifyPhase(phase) {
+  if (desktop) { desktop.notify(phase, run.steps[run.row].minutes); return; }
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
     new Notification(phase === 'work' ? 'Work started' : 'Break started', {
@@ -1547,7 +1579,8 @@ $('add-step').addEventListener('click', () => {
   renderSettings();
   $('step-list').lastElementChild?.querySelector('select')?.focus();
 });
-$('main-action').addEventListener('click', () => {
+function toggleTimer() {
+  if (desktop && !localDataReadable) { showSettings(); return; }
   if (!run && !steps.length) { showSettings(); return; }
   if (!run) {
     try { normalizeSteps(steps); }
@@ -1571,7 +1604,8 @@ $('main-action').addEventListener('click', () => {
   persist();
   renderTimer();
   renderTaskChoice();
-});
+}
+$('main-action').addEventListener('click', toggleTimer);
 
 $('skip').addEventListener('click', () => {
   if (!run) return;
@@ -1580,7 +1614,7 @@ $('skip').addEventListener('click', () => {
   renderTimer();
 });
 
-$('end').addEventListener('click', () => {
+function endTimer() {
   if (!run) return;
   advanceClock(run, Date.now());
   totalWorkMs = run.totalWorkMs;
@@ -1601,7 +1635,8 @@ $('end').addEventListener('click', () => {
   renderTimer();
   renderTaskChoice();
   $('main-action').focus();
-});
+}
+$('end').addEventListener('click', endTimer);
 
 $('permission').addEventListener('click', async () => {
   if (!window.Notification || window.Notification.permission !== 'default') { renderNotificationPermission(); return; }
@@ -1613,7 +1648,14 @@ $('permission').addEventListener('click', async () => {
   }
 });
 
-function downloadBackup() {
+async function downloadBackup() {
+  if (desktop) {
+    try {
+      const saved = await desktop.exportJSON(JSON.stringify(backupObject(), null, 2));
+      $('backup-status').textContent = saved ? 'JSON saved.' : 'Export cancelled.';
+    } catch (error) { $('backup-status').textContent = `Could not export JSON: ${error.message}`; }
+    return;
+  }
   const blob = new Blob([JSON.stringify(backupObject(), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -1663,6 +1705,67 @@ addEventListener('beforeunload', () => {
 });
 
 load();
+if (desktop) {
+  document.title = 'Practice Timer · desktop beta';
+  $('desktop-label').textContent = 'Desktop beta';
+  $('desktop-settings-title').textContent = 'Desktop beta';
+  $('desktop-settings').setAttribute('aria-label', 'Desktop beta');
+  $('desktop-banner').hidden = false;
+  $('desktop-settings').hidden = false;
+  let desktopSettings;
+  const shortcutInputs = { toggle: $('desktop-shortcut-toggle'), end: $('desktop-shortcut-end') };
+  const labels = { Space: 'Space', Enter: 'Return', Period: '.', Comma: ',' };
+  function showDesktopSettings(value) {
+    desktopSettings = value;
+    for (const [key, input] of Object.entries(shortcutInputs)) {
+      input.value = value.shortcuts[key].split('+').map(part => ({ Command: '⌘', Control: '⌃', Alt: '⌥', Shift: '⇧' }[part] || labels[part] || part)).join(' ');
+    }
+    $('desktop-shortcut-status').textContent = Object.values(value.registration).some(registered => !registered)
+      ? 'A shortcut is unavailable. Choose a different combination.' : '';
+  }
+  async function updateShortcuts(next) {
+    try {
+      const result = await desktop.setShortcuts(next);
+      showDesktopSettings(result);
+      $('desktop-shortcut-status').textContent = result.ok ? 'Shortcuts saved.' : result.error;
+    } catch { $('desktop-shortcut-status').textContent = 'Could not save shortcuts.'; }
+  }
+  desktop.settings().then(showDesktopSettings).catch(() => { $('desktop-shortcut-status').textContent = 'Could not read shortcuts.'; });
+  for (const [key, input] of Object.entries(shortcutInputs)) input.addEventListener('keydown', event => {
+    if (event.key === 'Tab') return;
+    event.preventDefault();
+    if (!desktopSettings || event.repeat || event.isComposing || ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return;
+    const modifiers = [event.metaKey && 'Command', event.ctrlKey && 'Control', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
+    const code = event.code || '';
+    const keyName = /^(Key[A-Z]|Digit[0-9])$/.test(code) ? code.replace(/^(Key|Digit)/, '')
+      : ['Space', 'Enter', 'Period', 'Comma'].includes(code) || /^F([1-9]|1[0-2])$/.test(code) ? code : null;
+    if (!modifiers.some(part => part !== 'Shift') || !keyName) {
+      $('desktop-shortcut-status').textContent = 'Use Command, Control or Option together with a letter, number, Space, Return or function key.';
+      return;
+    }
+    void updateShortcuts({ ...desktopSettings.shortcuts, [key]: [...modifiers, keyName].join('+') });
+  });
+  for (const input of Object.values(shortcutInputs)) {
+    input.addEventListener('focus', () => desktop.recordShortcut(true));
+    input.addEventListener('blur', () => desktop.recordShortcut(false));
+  }
+  $('desktop-shortcut-reset').addEventListener('click', () => { if (desktopSettings) void updateShortcuts(desktopSettings.defaults); });
+  desktop.onCommand(command => {
+    if (command.type === 'toggle') toggleTimer();
+    else if (command.type === 'end') endTimer();
+    else if (command.type === 'settings') showSettings();
+    else if (command.type === 'export') void downloadBackup();
+    else if (command.type === 'suspend') {
+      if (run?.status === 'running') {
+        handleEvent(pauseRun(run, Math.max(run.lastTick, Math.min(Date.now(), command.at))));
+        persist(); renderTimer();
+      }
+    } else if (command.type === 'quit') {
+      if (run?.status === 'running') handleEvent(pauseRun(run, Date.now()));
+      const saved = !localDataReadable || persist(); renderTimer(); desktop.finishQuit(saved);
+    }
+  });
+}
 draft = steps.map(step => ({ ...step }));
 // 折り返し・文字サイズ・端末の安全領域に合わせ、末尾のタスクと取り消し通知の重なりを防ぐ。
 if (window.ResizeObserver) {
@@ -1693,6 +1796,7 @@ setInterval(() => {
   if (!run || run.status !== 'running') return;
   handleEvent(advanceClock(run, Date.now()));
   if (Date.now() - lastSaved >= 1000) persist();
+  publishDesktop();
   if (!$('timer-view').hidden) renderTimer();
 }, 250);
 })();

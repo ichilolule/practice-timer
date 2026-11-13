@@ -6,9 +6,33 @@ const DB_NAME = 'practice-timer-backup-files';
 const STORE = 'settings';
 const IDLE_MS = 120_000;
 const MAX_MS = 300_000;
+const desktop = root.practiceDesktop;
+
+function desktopHandle({ fileId, name = FILE_NAME }) {
+  let expected = '';
+  return { kind: 'file', name, fileId,
+    queryPermission: async () => 'granted', requestPermission: async () => 'granted',
+    isSameEntry: async other => other.fileId === fileId,
+    getFile: async () => {
+      const text = await desktop.readBackup(fileId);
+      expected = text;
+      return { text: async () => text };
+    },
+    createWritable: async () => {
+      let text;
+      return { write: async value => { text = value; },
+        close: async () => { await desktop.writeBackup(fileId, text, expected); expected = text; }, abort: async () => {} };
+    },
+  };
+}
 
 // ファイルハンドルと、最後に確認したファイルのハッシュを同じトランザクションで記憶する。
 async function record(value) {
+  if (desktop) {
+    if (value === undefined) return { targets: (await desktop.readBackupTargets()).map(target => ({ ...target, handle: desktopHandle(target) })) };
+    await desktop.writeBackupTargets(value.targets.map(({ handle, ...target }) => ({ ...target, fileId: handle.fileId })));
+    return;
+  }
   const database = await new Promise((resolve, reject) => {
     const request = root.indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
@@ -33,7 +57,7 @@ async function hash(text) {
 
 function mount({ snapshot, content, canWrite, download }) {
   const $ = id => document.getElementById(id);
-  const supported = typeof root.showSaveFilePicker === 'function' && !!root.indexedDB && !!root.crypto?.subtle;
+  const supported = (!!desktop || (typeof root.showSaveFilePicker === 'function' && !!root.indexedDB)) && !!root.crypto?.subtle;
   let targets = [], readyDone = false, busy = false;
   let idleTimer = null, maxTimer = null, observed = content(), remembered = true;
   let wasWritable = canWrite();
@@ -63,7 +87,7 @@ function mount({ snapshot, content, canWrite, download }) {
     $('backup-save').disabled = !readyDone || busy || !canWrite();
     const saved = targets.filter(target => !target.issue && target.verified === observed).length;
     $('backup-auto-status').textContent = !canWrite()
-      ? 'File saving is paused because browser data could not be read. Import a backup to restore your data.'
+      ? `File saving is paused because ${desktop ? 'saved' : 'browser'} data could not be read. Import a backup to restore your data.`
       : !supported ? 'File autosave is not available in this browser. Save now downloads a JSON backup.'
       : !targets.length ? 'Add a backup destination to enable autosave.'
       : `${saved} of ${targets.length} destinations saved.` + (busy ? ' Saving…' : '') +
@@ -171,7 +195,9 @@ function mount({ snapshot, content, canWrite, download }) {
     busy = true; refresh();
     let nextId = null;
     try {
-      const handle = await root.showSaveFilePicker({
+      const picked = desktop ? await desktop.pickBackup() : null;
+      if (desktop && !picked) return;
+      const handle = desktop ? desktopHandle(picked) : await root.showSaveFilePicker({
         id: 'practice-timer-json', suggestedName: FILE_NAME,
         types: [{ description: 'Practice timer JSON', accept: { 'application/json': ['.json'] } }],
       });

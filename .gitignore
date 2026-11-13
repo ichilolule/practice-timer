@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.desktop-data/
+.desktop-test-data/
+.DS_Store
+practice-timer.json
+*.log
