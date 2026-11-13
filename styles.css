@@ -63,13 +63,17 @@ p { line-height: 1.5; }
 #status:empty { display: none; }
 .subtle { color: var(--color-muted); font-size: .9rem; }
 .task-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
-#completed-section > summary, .task-menu > summary { min-height: 2.75rem; padding: 0.625rem 0.25rem; cursor: pointer; }
+#completed-section > summary { min-height: 2.75rem; padding: 0.625rem 0.25rem; cursor: pointer; }
 #tasks-view { padding-bottom: var(--task-entry-height); }
 #themes-view { padding-bottom: var(--theme-entry-height); }
 #tasks-view .item-list li { scroll-margin-bottom: calc(var(--primary-nav-height) + var(--task-entry-height) + 0.75rem); }
 #quick-task-form, #theme-add { position: fixed; bottom: var(--primary-nav-height); left: 50%; transform: translateX(-50%); width: min(100%, var(--app-max-width)); z-index: 5; margin: 0; padding: 0.75rem 1.25rem; border-top: 0.0625rem solid var(--color-line); background: var(--color-surface); }
 .quiet-button { border-color: transparent; color: var(--color-muted); background: transparent; }
 #task-form { display: grid; gap: 0.75rem; }
+#task-form .task-actions { flex-wrap: nowrap; }
+#task-form .task-actions button { flex: 1; min-width: 0; padding-inline: .5rem; }
+#task-form .task-actions #task-save { flex: 1.5; }
+#task-delete { color: var(--color-danger); }
 #task-form label { display: grid; gap: 0.3125rem; }
 #task-form input, #task-form textarea, #task-form select, .inline-form input, .record-row input, .record-row select { padding: 0.5rem; border: 0.0625rem solid var(--color-border); border-radius: 0.375rem; }
 #quick-task-title { flex: 1 1 15rem; min-width: 0; }
@@ -84,13 +88,7 @@ dialog h2 { margin-top: 0; }
 .item-list .task-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0; }
 .task-check { display: grid; place-items: center; flex: 0 0 2.75rem; min-height: 3.5rem; cursor: pointer; }
 .task-check input { width: 1.25rem; height: 1.25rem; margin: 0; accent-color: var(--color-focus); cursor: pointer; }
-.task-details { flex: 1; min-width: 0; }
-.task-details > summary { min-height: 3.5rem; padding: 1rem 0.5rem; overflow-wrap: anywhere; cursor: pointer; }
-.task-detail-content { padding: 0 0.5rem 1rem; overflow-wrap: anywhere; }
-.task-detail-content .subtle { margin-top: 0.75rem; }
-.task-menu { margin-top: 0.5rem; }
-.task-menu > summary { color: var(--color-muted); font-size: .9rem; width: fit-content; }
-.task-menu button { color: var(--color-danger); }
+.task-title-button { flex: 1; min-width: 0; min-height: 3.5rem; padding: 1rem .5rem; border: 0; background: transparent; border-radius: .375rem; text-align: left; overflow-wrap: anywhere; }
 .task-pick-row { display: flex; align-items: center; }
 .task-pick { display: block; flex: 1; min-width: 0; width: 100%; border: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-drag-handle { flex: 0 0 2rem; min-width: 2rem; padding: 0.5rem 0.125rem; border: 0; background: transparent; color: var(--color-muted); cursor: grab; touch-action: none; user-select: none; }
@@ -98,7 +96,6 @@ dialog h2 { margin-top: 0; }
 .task-dragging { opacity: .45; }
 .task-drop-before { box-shadow: 0 -0.1875rem var(--color-focus); }
 .task-drop-after { box-shadow: 0 0.1875rem var(--color-focus); }
-.task-detail-content p { white-space: pre-wrap; }
 .task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .task-feedback p:empty { display: none; }
 .task-toast { position: fixed; z-index: 20; right: max(1rem, calc((100vw - var(--app-max-width)) / 2 + 1rem)); bottom: calc(5.5rem + env(safe-area-inset-bottom)); max-width: calc(100vw - 2rem); }
@@ -363,7 +360,8 @@ dialog h2 { margin-top: 0; }
   .growth-summary { padding-right: .5rem; }
   .period-chart-layout { gap: .375rem; padding: .5rem 0 0 .5rem; }
   .period-axis, .period-bar-track { height: 7rem; }
-  .period-chart { height: 9rem; gap: .125rem; padding-inline: 0; }
+  /* Keep room beside narrow bars for two-digit date labels. */
+  .period-chart { height: 9rem; gap: .125rem; }
   #day-untimed { margin: -1rem 0 1rem; }
   #record-list .record-row { grid-template-columns: 10ch 2.75rem minmax(0, 1fr) max-content; }
   .theme-card-grid { gap: .75rem; }

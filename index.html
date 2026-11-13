@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Practice timer</title>
-  <link rel="stylesheet" href="styles.css?rev=5ee1bdd985">
+  <link rel="stylesheet" href="styles.css?rev=031371850f">
   <script defer src="timer-core.js"></script>
   <script defer src="practice-data.js?rev=62c8cf32cb"></script>
   <script defer src="backup-files.js?rev=ce6703fa73"></script>
-  <script defer src="app.js?rev=2cfa14b9ed"></script>
+  <script defer src="app.js?rev=5c96b79b94"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -95,9 +95,8 @@
         <ul id="completed-list" class="item-list"></ul>
       </details>
       <form id="quick-task-form" class="inline-form">
-        <input id="quick-task-title" type="text" maxlength="100" placeholder="Add task" aria-label="Add task" required>
+        <input id="quick-task-title" type="text" maxlength="100" placeholder="Add task" aria-label="Add task">
         <button type="submit">+ Add</button>
-        <button id="task-details-add" class="quiet-button" type="button">Add details</button>
       </form>
     </section>
 
@@ -257,6 +256,7 @@
         <div class="task-actions">
           <button id="task-save" type="submit">Save</button>
           <button id="task-cancel" type="button">Cancel</button>
+          <button id="task-delete" type="button" hidden>Delete</button>
         </div>
       </form>
     </dialog>

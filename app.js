@@ -141,7 +141,7 @@ function renderTaskChoice(rebuildPicker = true) {
   $('active-task-hint').textContent = task?.firstStep || '';
   $('active-task-hint').title = task?.firstStep || '';
   $('active-task-hint').hidden = !task?.firstStep;
-  const hideList = Boolean(run);
+  const hideList = Boolean(run && selectedTaskId);
   $('timer-layout').setAttribute('data-running', String(hideList));
   if (!rebuildPicker && !$('active-task-panel').hidden) taskPickerScrollTop = $('task-picker-list').scrollTop;
   if (rebuildPicker) renderTaskPicker();
@@ -420,6 +420,8 @@ function openTaskEditor(task = null, source = null) {
   renderTaskChildren(childId);
   $('task-dialog-title').textContent = task ? 'Edit task' : 'Add task';
   $('task-save').textContent = task ? 'Save changes' : 'Add';
+  $('task-delete').hidden = !task;
+  $('task-delete').disabled = Boolean(task && run && selectedTaskId === task.id);
   $('task-dialog').showModal();
   $('task-title').focus();
 }
@@ -512,56 +514,10 @@ function taskRow(task, completed) {
   check.setAttribute('aria-label', `${completed ? 'Mark unfinished' : 'Mark complete'}: ${task.title}`);
   check.addEventListener('change', () => setTaskCompleted(task, check.checked));
   checkLabel.append(check);
-  const details = document.createElement('details');
-  details.className = 'task-details';
-  const title = document.createElement('summary');
+  const title = rowButton(task.title, `Edit ${task.title}`, () => openTaskEditor(task));
   title.id = `task-title-${task.id}`;
-  title.textContent = task.title;
-  const content = document.createElement('div');
-  content.className = 'task-detail-content';
-  if (task.firstStep) {
-    const firstStep = document.createElement('p');
-    firstStep.textContent = `Notes: ${task.firstStep}`;
-    content.append(firstStep);
-  }
-  const target = targetLabel(groups, task.targetId);
-  if (target) {
-    const category = document.createElement('p');
-    category.className = 'subtle';
-    category.textContent = `Theme: ${target}`;
-    content.append(category);
-  }
-  if (completed) {
-    const date = document.createElement('p');
-    date.className = 'subtle';
-    date.textContent = `Completed: ${new Date(task.completedAt).toLocaleDateString('en-US')}`;
-    content.append(date);
-  }
-  const actions = document.createElement('div');
-  actions.className = 'task-actions';
-  if (!completed && !(run && selectedTaskId)) {
-    actions.append(rowButton('Use this task', `Select ${task.title}`, () => chooseTask(task)));
-  }
-  actions.append(rowButton('Edit', `Edit ${task.title}`, () => openTaskEditor(task)));
-  const menu = document.createElement('details');
-  menu.className = 'task-menu';
-  const menuTitle = document.createElement('summary');
-  menuTitle.textContent = 'More actions';
-  menu.append(menuTitle, rowButton('Delete', `Delete ${task.title}`, () => {
-    if (run && selectedTaskId === task.id) return;
-    if (!confirm(`Delete “${task.title}”? Existing time records will be kept.`)) return;
-    tasks = tasks.filter((item) => item.id !== task.id);
-    if (selectedTaskId === task.id) selectedTaskId = null;
-    if (taskUndo?.taskId === task.id) clearTaskUndo();
-    persist();
-    renderTasks();
-    renderTaskChoice();
-    $('task-status').textContent = 'Task deleted.';
-    $('quick-task-title').focus();
-  }, Boolean(run && selectedTaskId === task.id)));
-  content.append(actions, menu);
-  details.append(title, content);
-  item.append(checkLabel, details);
+  title.className = 'task-title-button';
+  item.append(checkLabel, title);
   if (!completed) {
     item.setAttribute('data-task-id', task.id);
     item.append(taskDragHandle(task, item, 'task-list'));
@@ -1474,7 +1430,6 @@ $('timer-quick-task-form').addEventListener('submit', (event) => {
   addQuickTask(title, true);
   input.value = '';
 });
-$('task-details-add').addEventListener('click', () => openTaskEditor(null, 'quick-task-title'));
 $('task-undo').addEventListener('click', () => {
   const task = tasks.find((item) => item.id === taskUndo?.taskId);
   if (!task || task.completedAt !== taskUndo.completedAt) return;
@@ -1494,7 +1449,7 @@ $('quick-task-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const input = $('quick-task-title');
   const title = input.value.trim();
-  if (!title) return;
+  if (!title) { openTaskEditor(null, 'quick-task-title'); return; }
   addQuickTask(title);
   input.value = '';
 });
@@ -1503,6 +1458,22 @@ $('task-form').addEventListener('submit', (event) => {
   saveTask();
 });
 $('task-cancel').addEventListener('click', resetTaskForm);
+$('task-delete').addEventListener('click', () => {
+  const task = tasks.find(item => item.id === editingTaskId);
+  if (!task || (run && selectedTaskId === task.id)) return;
+  if (!confirm(`Delete “${task.title}”? Existing time records will be kept.`)) return;
+  tasks = tasks.filter(item => item.id !== task.id);
+  if (selectedTaskId === task.id) selectedTaskId = null;
+  if (taskUndo?.taskId === task.id) clearTaskUndo();
+  persist();
+  resetTaskForm();
+  renderTasks();
+  renderTaskChoice();
+  $('task-status').textContent = 'Task deleted.';
+  if (!$('tasks-view').hidden) $('quick-task-title').focus();
+  else $('main-action').focus();
+});
+
 $('group-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const title = $('group-title').value.trim();
