@@ -4,7 +4,7 @@
 const MAX_MINUTES = 240;
 const LATE_LIMIT_MS = 90_000;
 
-function normalizeSteps(rows) {
+function normalizeSteps(rows, { requireBoth = true } = {}) {
   if (!Array.isArray(rows) || !rows.length) throw new Error('Add at least one timer step.');
   const steps = rows.map((row, index) => {
     const minutes = Number(row.minutes);
@@ -15,7 +15,7 @@ function normalizeSteps(rows) {
     }
     return { type: row.type, minutes: Math.round(minutes * 10) / 10 };
   });
-  if (!steps.some((step) => step.type === 'work') || !steps.some((step) => step.type === 'rest')) {
+  if (requireBoth && (!steps.some((step) => step.type === 'work') || !steps.some((step) => step.type === 'rest'))) {
     throw new Error('Add at least one work step and one break step.');
   }
   return steps;

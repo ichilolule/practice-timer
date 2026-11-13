@@ -13,7 +13,6 @@ const SOUND_VOLUME_SCALE = 5;
 const $ = (id) => document.getElementById(id);
 let steps = [];
 let draft = [];
-let settingsDraftActive = false;
 let run = null;
 let totalWorkMs = 0;
 let tasks = [];
@@ -50,7 +49,7 @@ function load() {
       ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = validateBackup(saved));
       return;
     }
-    if (Array.isArray(saved.steps) && saved.steps.length) steps = normalizeSteps(saved.steps);
+    if (Array.isArray(saved.steps) && saved.steps.length) steps = normalizeSteps(saved.steps, { requireBoth: false });
     if (Number.isFinite(saved.totalWorkMs) && saved.totalWorkMs >= 0) totalWorkMs = saved.totalWorkMs;
     run = restoreRun(saved.run);
     if (run) totalWorkMs = run.totalWorkMs;
@@ -226,7 +225,7 @@ function typeField(value, index) {
     select.append(option);
   }
   select.value = value;
-  select.addEventListener('change', () => { draft[index].type = select.value; });
+  select.addEventListener('change', () => { draft[index].type = select.value; applyRoutine(); });
   wrapper.append(select);
   return wrapper;
 }
@@ -244,7 +243,7 @@ function numberField(value, index) {
   input.required = true;
   input.inputMode = 'decimal';
   input.value = value;
-  input.addEventListener('input', () => { draft[index].minutes = input.value; });
+  input.addEventListener('input', () => { draft[index].minutes = input.value; applyRoutine(); });
   const unit = document.createElement('span'); unit.className = 'step-minute-unit'; unit.textContent = 'm'; unit.setAttribute('aria-hidden', 'true');
   wrapper.append(input, unit);
   return wrapper;
@@ -281,6 +280,7 @@ function moveRow(from, to) {
   if (to < 0 || to >= draft.length || from === to) return;
   const [row] = draft.splice(from, 1);
   draft.splice(to, 0, row);
+  applyRoutine();
   renderSettings();
   $('step-list').children[to]?.querySelector('button')?.focus({ preventScroll: true });
 }
@@ -369,7 +369,7 @@ function renderSettings() {
     item.setAttribute('data-step-index', String(index));
     const row = document.createElement('div');
     row.className = 'step-row';
-    const remove = rowButton('×', `Delete step ${index + 1}`, () => { draft.splice(index, 1); renderSettings(); });
+    const remove = rowButton('×', `Delete step ${index + 1}`, () => { draft.splice(index, 1); applyRoutine(); renderSettings(); });
     remove.className = 'step-delete';
     row.append(stepDragHandle(item, index), typeField(step.type, index), numberField(step.minutes, index), remove);
     item.append(row);
@@ -1178,7 +1178,7 @@ function validateBackup(raw) {
       !Array.isArray(raw.groups) || !Array.isArray(raw.sessions)) {
     throw new Error('This is not a supported Practice timer beta backup.');
   }
-  const restoredSteps = raw.steps.length ? normalizeSteps(raw.steps) : [];
+  const restoredSteps = raw.steps.length ? normalizeSteps(raw.steps, { requireBoth: false }) : [];
   const ids = new Set();
   const takeId = (value) => {
     if (typeof value !== 'string' || !value || ids.has(value)) throw new Error('Invalid or duplicate ID.');
@@ -1267,10 +1267,29 @@ function renderNotificationPermission() {
 
 addEventListener('focus', renderNotificationPermission);
 
+function routineError() {
+  if (!draft.length) return '';
+  try { normalizeSteps(draft); return ''; }
+  catch (error) { return error.message; }
+}
+
+function applyRoutine() {
+  try {
+    // A single work/break row can be saved while building a routine; starting still requires both.
+    const next = draft.length ? normalizeSteps(draft, { requireBoth: false }) : [];
+    steps = next;
+    persist();
+    renderTimer();
+    if (run && !$('status').textContent) $('status').textContent = 'Changes apply to the next session.';
+  } catch (error) {
+    $('settings-error').textContent = error.message;
+    return;
+  }
+  $('settings-error').textContent = routineError();
+}
+
 function showSettings() {
-  if (!settingsDraftActive) draft = steps.map((step) => ({ ...step }));
-  settingsDraftActive = true;
-  $('settings-error').textContent = '';
+  $('settings-error').textContent = routineError();
   renderNotificationPermission();
   renderSettings();
   renderSoundSettings();
@@ -1522,26 +1541,18 @@ $('record-cancel').addEventListener('click', closeRecordEditor);
 $('record-delete').addEventListener('click', () => deleteRecord(false));
 $('record-delete-group').addEventListener('click', () => deleteRecord(true));
 $('add-step').addEventListener('click', () => {
-  draft.push({ type: '', minutes: '' });
+  const type = draft.at(-1)?.type === 'work' ? 'rest' : 'work';
+  const minutes = steps.findLast(step => step.type === type)?.minutes ?? (type === 'work' ? 25 : 5);
+  draft.push({ type, minutes });
+  applyRoutine();
   renderSettings();
   $('step-list').lastElementChild?.querySelector('select')?.focus();
 });
-$('save-settings').addEventListener('click', () => {
-  try {
-    steps = normalizeSteps(draft);
-    settingsDraftActive = false;
-    if (run) $('status').textContent = 'Changes apply to the next session.';
-    persist();
-    showTimer();
-  } catch (error) {
-    $('settings-error').textContent = error.message;
-  }
-});
-$('cancel-settings').addEventListener('click', () => { settingsDraftActive = false; showTimer(); });
-
 $('main-action').addEventListener('click', () => {
   if (!run && !steps.length) { showSettings(); return; }
   if (!run) {
+    try { normalizeSteps(steps); }
+    catch { showSettings(); return; }
     const audioReady = soundSettings.volume ? prepareAudio() : Promise.resolve(true);
     run = createRun(steps, totalWorkMs, Date.now());
     run.recordGroupId = newId();
@@ -1625,7 +1636,9 @@ $('import-file').addEventListener('change', async () => {
     if (!confirm('Replace all current data with this JSON backup?')) return;
     ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
     localDataReadable = true;
-    settingsDraftActive = false;
+    draft = steps.map(step => ({ ...step }));
+    renderSettings();
+    $('settings-error').textContent = routineError();
     clearTaskUndo();
     activeThemeId = null;
     $('theme-details-dialog').close();
@@ -1651,6 +1664,7 @@ addEventListener('beforeunload', () => {
 });
 
 load();
+draft = steps.map(step => ({ ...step }));
 // 折り返し・文字サイズ・端末の安全領域に合わせ、末尾のタスクと取り消し通知の重なりを防ぐ。
 if (window.ResizeObserver) {
   const heightProperties = {

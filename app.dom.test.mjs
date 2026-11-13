@@ -318,7 +318,7 @@ test('旧版の音量は同じ大きさで引き継ぎ、高さを変えても�
   }
 });
 
-test('下部の設定から別の画面へ移動しても入力を保ち、キャンセルで元に戻せる', async () => {
+test('Routineの変更は自動保存され、画面移動と再起動後も保持する', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
   })]]);
@@ -334,12 +334,12 @@ test('下部の設定から別の画面へ移動しても入力を保ち、キ�
   assert.equal(elements.get('primary-nav').hidden, false);
   assert.equal(elements.get('settings-toggle').getAttribute('aria-current'), 'page');
   assert.equal(elements.get('step-list').children[0].querySelector('input').value, '30');
-  await elements.get('cancel-settings').trigger('click');
-  await elements.get('settings-toggle').trigger('click');
-  assert.equal(elements.get('step-list').children[0].querySelector('input').value, 25);
+  const restored = mount(storage);
+  await restored.elements.get('settings-toggle').trigger('click');
+  assert.equal(restored.elements.get('step-list').children[0].querySelector('input').value, 30);
 });
 
-test('Routineは編集中の値を保ってドラッグ・上下キーで並べ替え、保存後の工程順とJSONへ反映する', async () => {
+test('Routineは入力・ドラッグ・上下キーでの変更をすぐに保存し、工程順とJSONへ反映する', async () => {
   const original = [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }, { type: 'work', minutes: 10 }];
   const storage = new Map([['practice-timer-v1', JSON.stringify({ steps: original, totalWorkMs: 0 })]]);
   const app = mount(storage);
@@ -359,14 +359,15 @@ test('Routineは編集中の値を保ってドラッグ・上下キーで並べ�
   await handle.trigger('pointermove', { ...pointer, clientY: 160 });
   await handle.trigger('pointerup', { ...pointer, clientY: 160 });
   assert.deepEqual(values(), [['rest', 5], ['work', 10], ['work', 35]]);
-  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, original);
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps,
+    [{ type: 'rest', minutes: 5 }, { type: 'work', minutes: 10 }, { type: 'work', minutes: 35 }]);
   assert.equal(list.children[2].querySelector('button').focusOptions.preventScroll, true);
   await list.children[1].querySelector('button').trigger('keydown', { key: 'ArrowUp' });
   assert.deepEqual(values(), [['work', 10], ['rest', 5], ['work', 35]]);
   await elements.get('nav-tasks').trigger('click');
   await elements.get('settings-toggle').trigger('click');
   assert.deepEqual(values(), [['work', 10], ['rest', 5], ['work', 35]]);
-  await elements.get('save-settings').trigger('click');
+  await elements.get('nav-timer').trigger('click');
   assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps,
     [{ type: 'work', minutes: 10 }, { type: 'rest', minutes: 5 }, { type: 'work', minutes: 35 }]);
   await elements.get('main-action').trigger('click');
@@ -381,7 +382,7 @@ test('Routineは編集中の値を保ってドラッグ・上下キーで並べ�
   assert.deepEqual(backup.steps, JSON.parse(storage.get('practice-timer-v1')).steps);
 });
 
-test('Routineのドラッグ中止・微小移動・タブ移動では順序を変えず、Cancelで保存済みの順序へ戻せる', async () => {
+test('Routineのドラッグ中止・微小移動・タブ移動では順序を変えず、確定した並べ替えと削除はすぐ保存する', async () => {
   const original = [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }];
   const storage = new Map([['practice-timer-v1', JSON.stringify({ steps: original, totalWorkMs: 0 })]]);
   const app = mount(storage);
@@ -409,15 +410,76 @@ test('Routineのドラッグ中止・微小移動・タブ移動では順序を�
   await elements.get('settings-toggle').trigger('click');
   await list.children[0].querySelector('button').trigger('keydown', { key: 'ArrowDown' });
   assert.equal(list.children[0].querySelector('input').value, 5);
-  await elements.get('cancel-settings').trigger('click');
+  await elements.get('nav-timer').trigger('click');
   await elements.get('settings-toggle').trigger('click');
-  assert.equal(list.children[0].querySelector('input').value, 25);
-  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, original);
+  assert.equal(list.children[0].querySelector('input').value, 5);
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, [...original].reverse());
   const remove = buttonNamed(list.children[0], '×');
   assert.equal(remove.getAttribute('aria-label'), 'Delete step 1');
   await remove.trigger('click');
   assert.equal(list.children.length, 1);
-  assert.equal(list.children[0].querySelector('input').value, 5);
+  assert.equal(list.children[0].querySelector('input').value, 25);
+  assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, [original[0]]);
+});
+
+test('Routineの追加・削除は即保存し、片方だけの工程も再起動・JSON復元できるが開始はできない', async () => {
+  const app = mount();
+  const { elements, storage } = app;
+  const savedSteps = () => JSON.parse(storage.get('practice-timer-v1')).steps;
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.has('save-settings'), false);
+  assert.equal(elements.has('cancel-settings'), false);
+  await elements.get('add-step').trigger('click');
+  assert.deepEqual(savedSteps(), [{ type: 'work', minutes: 25 }]);
+  await elements.get('nav-timer').trigger('click');
+  await elements.get('main-action').trigger('click');
+  assert.equal(elements.get('settings-view').hidden, false);
+  assert.match(elements.get('settings-error').textContent, /one work step and one break/);
+  await elements.get('add-step').trigger('click');
+  assert.deepEqual(savedSteps(), [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }]);
+  assert.equal(elements.get('settings-error').textContent, '');
+  await buttonNamed(elements.get('step-list').children[0], '×').trigger('click');
+  assert.deepEqual(savedSteps(), [{ type: 'rest', minutes: 5 }]);
+  const restored = mount(storage);
+  await restored.elements.get('settings-toggle').trigger('click');
+  assert.equal(restored.elements.get('step-list').children.length, 1);
+  await restored.elements.get('backup-save').trigger('click');
+  const backup = await restored.exportedBlob.text();
+  const imported = mount();
+  await imported.elements.get('settings-toggle').trigger('click');
+  await imported.elements.get('add-step').trigger('click');
+  imported.elements.get('import-file').files = [{ size: backup.length, text: async () => backup }];
+  await imported.elements.get('import-file').trigger('change');
+  assert.equal(imported.elements.get('step-list').children[0].querySelector('select').value, 'rest');
+  await imported.elements.get('add-step').trigger('click');
+  assert.deepEqual(JSON.parse(imported.storage.get('practice-timer-v1')).steps,
+    [{ type: 'rest', minutes: 5 }, { type: 'work', minutes: 25 }]);
+  await buttonNamed(elements.get('step-list').children[0], '×').trigger('click');
+  assert.deepEqual(savedSteps(), []);
+  assert.equal(elements.get('clock').textContent, '00:00');
+});
+
+test('Routineの空欄・範囲外入力は最後の有効な内容を保ち、修正したら自動適用する', async () => {
+  const original = [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }];
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({ steps: original, totalWorkMs: 0 })]]));
+  const { elements, storage } = app;
+  await elements.get('settings-toggle').trigger('click');
+  const input = elements.get('step-list').children[0].querySelector('input');
+  for (const value of ['', '0', '241', '2.55']) {
+    input.value = value;
+    await input.trigger('input');
+    assert.deepEqual(JSON.parse(storage.get('practice-timer-v1')).steps, original);
+    assert.match(elements.get('settings-error').textContent, /0.1–240/);
+  }
+  await elements.get('nav-tasks').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  const current = elements.get('step-list').children[0].querySelector('input');
+  assert.equal(current.value, '2.55');
+  current.value = '12.5';
+  await current.trigger('input');
+  assert.equal(elements.get('settings-error').textContent, '');
+  assert.equal(JSON.parse(storage.get('practice-timer-v1')).steps[0].minutes, 12.5);
+  assert.equal(elements.get('clock').textContent, '12:30');
 });
 
 test('通常の開始説明を省き、音の失敗は工程移行後も残し、再読込は停止アイコンで示す', async () => {
@@ -452,7 +514,7 @@ test('保存失敗は音の失敗で上書きしない', async () => {
 
 test('HTMLを直接開く構成で追加・保存・開始・次へが動く', async () => {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
-  assert.match(html, /<script defer src="timer-core\.js"><\/script>/);
+  assert.match(html, /<script defer src="timer-core\.js\?rev=[a-f0-9]+"><\/script>/);
   assert.match(html, /<script defer src="practice-data\.js\?rev=[a-f0-9]+"><\/script>/);
   assert.match(html, /<script defer src="app\.js\?rev=[a-f0-9]+"><\/script>/);
   assert.doesNotMatch(html, /type="module"/);
@@ -487,7 +549,7 @@ test('HTMLを直接開く構成で追加・保存・開始・次へが動く', a
   restTime.value = '0.1';
   restTime.trigger('input');
 
-  await elements.get('save-settings').trigger('click');
+  await elements.get('nav-timer').trigger('click');
   assert.equal(elements.get('timer-view').hidden, false);
   assert.equal(elements.get('main-action').disabled, false);
   assert.equal(elements.get('clock').textContent, '00:06');
@@ -1456,7 +1518,7 @@ test('円の残り割合とLoggedは一時停止・休憩を除外し、計測�
     row.querySelector('input').value = '1';
     await row.querySelector('input').trigger('input');
   }
-  await elements.get('save-settings').trigger('click');
+  await elements.get('nav-timer').trigger('click');
   assert.equal(ring(), '75 100');
   await elements.get('end').trigger('click');
   assert.equal(elements.get('clock').textContent, '01:00');

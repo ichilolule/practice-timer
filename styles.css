@@ -55,7 +55,7 @@ h2 { font-size: 1rem; margin: 1.875rem 0 0.75rem; }
 h3 { font-size: 1rem; }
 p { line-height: 1.5; }
 .controls { justify-content: center; margin: 1.5625rem 0 0.75rem; }
-#main-action, #save-settings { background: var(--color-selection); border-color: var(--color-accent); font-weight: 700; }
+#main-action { background: var(--color-selection); border-color: var(--color-accent); font-weight: 700; }
 .icon-button { display: inline-grid; place-items: center; width: 3rem; height: 3rem; padding: 0; border-radius: 50%; }
 #skip { grid-column: 1; grid-row: 1; border-color: transparent; }
 #end { grid-column: 3; grid-row: 1; border-color: transparent; }
@@ -206,7 +206,6 @@ dialog h2 { margin-top: 0; }
 #backup-file-message:empty { display: none; }
 .step-row label { display: grid; gap: 0.1875rem; font-size: .9rem; }
 .step-row input, .step-row select { width: 5.625rem; padding: 0.5rem; border: 0.0625rem solid var(--color-border); border-radius: 0.375rem; }
-.settings-actions { justify-content: flex-start; }
 #settings-error { color: var(--color-danger); min-height: 1.5em; }
 .settings-hint { margin-left: 0.5rem; color: var(--color-muted); font-size: .75rem; font-weight: 400; }
 .day-boundary-setting { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.875rem; }
@@ -248,7 +247,7 @@ dialog h2 { margin-top: 0; }
 /* Reserve space for the actual title/notes and controls; only the circle yields height. */
 .timer-dial-space { display: grid; place-items: center; width: 100%; flex: 0 1 var(--timer-diameter); min-height: 10rem; container-type: size; }
 .timer-dial { position: relative; width: min(100cqi, 100cqb, var(--timer-diameter)); aspect-ratio: 1; container-type: inline-size; }
-.timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke-width: 3.2; transform: rotate(-90deg); }
+.timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke-width: 3.2; transform: rotate(-90deg) scaleY(-1); }
 .timer-ring-track { stroke: var(--color-ring-track); }
 #timer-ring-remaining { stroke: var(--color-accent); }
 .timer-dial-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3cqi; padding: 12%; }
@@ -299,8 +298,6 @@ dialog h2 { margin-top: 0; }
 #settings-view .step-row input, #settings-view .step-row select { width: 100%; min-height: 2.75rem; background: transparent; }
 #settings-view .step-row input { font-size: 1rem; font-weight: 650; text-align: center; padding: 0.125rem 0.25rem; }
 #add-step { display: grid; place-items: center; justify-self: end; min-height: 2.75rem; width: 2.75rem; padding: 0; border-radius: .625rem; }
-#settings-view .settings-actions { margin: 1rem 0 0; }
-#settings-view .settings-actions button { flex: 1; }
 #settings-view .day-boundary-setting { margin: 0; }
 #settings-view .day-boundary-setting input { width: 100%; min-height: 3.75rem; padding: 0.625rem 1rem; border-radius: 0.875rem; font-size: 1.5rem; font-weight: 600; }
 #settings-view .sound-settings { display: grid; gap: 1.25rem; max-width: none; margin: 0; }

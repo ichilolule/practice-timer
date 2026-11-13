@@ -18,6 +18,14 @@ test('空設定、未入力、作業か休憩の欠落は開始できない', ()
   assert.throws(() => normalizeSteps([{ type: 'work', minutes: 5 }]));
 });
 
+test('Routineの編集中は片方の種類だけでも保存できるが、開始・実行状態の復元には両方必要', () => {
+  const rows = [{ type: 'work', minutes: 25 }];
+  assert.deepEqual(normalizeSteps(rows, { requireBoth: false }), rows);
+  assert.throws(() => normalizeSteps([{ type: 'work', minutes: '' }], { requireBoth: false }));
+  assert.throws(() => createRun(rows, 0, 0));
+  assert.equal(restoreRun({ steps: rows }), null);
+});
+
 test('設定した順番で進み、最後の作業時間と休憩時間を交互に繰り返す', () => {
   const run = createRun(sequence, 0, 0);
   assert.deepEqual(advanceClock(run, 6000), { kind: 'phase', phase: 'rest' });
