@@ -9,9 +9,9 @@
 - 正式公開: https://ichilolule.github.io/practice-timer/
 - 旧Sitesテスト環境: https://practice-timer-beta-20261110.annualvanilla2.chatgpt.site/ — 2026-11-13に非公開化し、所有者のみ閲覧可能。現在の公開先は上記GitHub Pagesです。
 
-## 自分用Macデスクトップ版（beta）
+## 自分用Macデスクトップ版
 
-Web版と同じ画面・タイマー計算・JSON形式を使う、Electron製のローカルアプリです。デスクトップ版は試験段階です。スマホでは引き続きWeb版を使えます。データの自動同期はなく、JSONで受け渡します。
+Web版と同じ画面・タイマー計算・JSON形式を使う、Electron製のローカルアプリです。スマホでは引き続きWeb版を使えます。データの自動同期はなく、JSONで受け渡します。
 
 ### 起動・常駐・ショートカット
 

@@ -29,7 +29,7 @@ async function quit(app) {
   await closed;
 }
 
-test('desktop beta: native menus, hidden timing, shortcuts, backups, suspend, restart and mobile Web', { timeout: 120_000 }, async t => {
+test('desktop: native menus, hidden timing, shortcuts, backups, suspend, restart and mobile Web', { timeout: 120_000 }, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-e2e-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify(fixture));
@@ -38,8 +38,10 @@ test('desktop beta: native menus, hidden timing, shortcuts, backups, suspend, re
   let page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.waitForSelector('#desktop-banner:visible');
-  assert.equal(await page.title(), 'Practice Timer · desktop beta');
+  await page.waitForSelector('#desktop-settings', { state: 'attached' });
+  assert.equal(await page.title(), 'Practice Timer');
+  assert.equal(await page.locator('#desktop-banner').isVisible(), false);
+  assert.equal(await page.locator('#desktop-save-status').textContent(), '');
   assert.match(page.url(), /^http:\/\/127\.0\.0\.1:/);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   await app.evaluate(({ Tray }) => {
@@ -142,7 +144,7 @@ test('desktop beta: native menus, hidden timing, shortcuts, backups, suspend, re
   assert.equal(onDisk.run.status, 'paused');
   assert.equal(onDisk.tasks[0].title, 'Desktop test task');
   app = await launch(directory); page = await app.firstWindow();
-  await page.waitForSelector('#desktop-banner:visible');
+  await page.waitForSelector('#desktop-settings', { state: 'attached' });
   assert.equal(await page.locator('#main-action').getAttribute('aria-label'), 'Resume');
   assert.equal((await state(page)).run.remainingMs, beforeQuit);
   assert.deepEqual((await page.evaluate(() => practiceDesktop.settings())).shortcuts, shortcuts);
@@ -190,6 +192,8 @@ test('corrupt native data is kept intact until a valid JSON is explicitly import
   await page.locator('#import-file').setInputFiles({ name: 'practice-timer.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) });
   await page.waitForFunction(() => document.getElementById('backup-status').textContent === 'JSON imported.');
   assert.equal(JSON.parse(await readFile(filename, 'utf8')).steps.length, 2);
+  assert.equal(await page.locator('#desktop-banner').isVisible(), false);
+  assert.equal(await page.locator('#desktop-save-status').textContent(), '');
   await quit(app);
 });
 
@@ -201,7 +205,7 @@ test('hidden phase changes and quitting a running timer preserve elapsed work', 
   const app = await launch(directory);
   t.after(() => app.close().catch(() => {}));
   const page = await app.firstWindow();
-  await page.waitForSelector('#desktop-banner:visible');
+  await page.waitForSelector('#desktop-settings', { state: 'attached' });
   await command(app, 'toggle');
   await page.waitForFunction(() => document.getElementById('main-action').getAttribute('aria-label') === 'Pause');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
@@ -223,7 +227,7 @@ test('desktop security: imported markup, denied browser permissions, foreign win
   const app = await launch(directory);
   t.after(() => app.close().catch(() => {}));
   const page = await app.firstWindow();
-  await page.waitForSelector('#desktop-banner:visible');
+  await page.waitForSelector('#desktop-settings', { state: 'attached' });
   assert.ok((await page.locator('#task-picker-list').textContent()).includes(payload));
   assert.equal(await page.locator('#task-picker-list img').count(), 0);
   assert.equal(await page.evaluate(() => window.__injected), undefined);

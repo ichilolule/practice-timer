@@ -65,7 +65,10 @@ function load() {
   } catch {
     localDataReadable = false;
     $('status').textContent = 'Could not read saved data. Check Settings.';
-    if (desktop) $('desktop-save-status').textContent = 'Saved data could not be read. Import a JSON backup to restore it.';
+    if (desktop) {
+      $('desktop-save-status').textContent = 'Saved data could not be read. Import a JSON backup to restore it.';
+      $('desktop-banner').hidden = false;
+    }
   }
 }
 
@@ -79,7 +82,8 @@ function persist() {
     if (desktop) {
       const result = desktop.saveState(value);
       if (!result.ok) throw new Error(result.error || 'Could not save on this Mac.');
-      $('desktop-save-status').textContent = 'Saved on this Mac';
+      $('desktop-save-status').textContent = '';
+      $('desktop-banner').hidden = true;
     } else localStorage.setItem(STORAGE_KEY, value);
     lastSaved = Date.now();
     publishDesktop();
@@ -87,7 +91,10 @@ function persist() {
   } catch (error) {
     $('status').textContent = desktop ? 'Could not save on this Mac. Export a JSON backup before quitting.'
       : 'Could not save in this browser. Check your storage settings.';
-    if (desktop) $('desktop-save-status').textContent = error.message;
+    if (desktop) {
+      $('desktop-save-status').textContent = error.message;
+      $('desktop-banner').hidden = false;
+    }
     return false;
   }
 }
@@ -1706,9 +1713,7 @@ addEventListener('beforeunload', () => {
 
 load();
 if (desktop) {
-  document.title = 'Practice Timer · desktop beta';
-  $('desktop-label').textContent = 'Desktop beta';
-  $('desktop-banner').hidden = false;
+  document.title = 'Practice Timer';
   $('desktop-settings').hidden = false;
   let desktopSettings;
   const shortcutInputs = { toggle: $('desktop-shortcut-toggle'), end: $('desktop-shortcut-end') };

@@ -31,7 +31,9 @@ async function launch(profile, extraEnv = {}) {
   const browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
   const page = context.pages()[0] || await context.waitForEvent('page');
-  await page.waitForSelector('#desktop-banner:visible');
+  await page.waitForSelector('#desktop-settings', { state: 'attached' });
+  assert.equal(await page.title(), 'Practice Timer');
+  assert.equal(await page.locator('#desktop-banner').isVisible(), false);
   return { child, page, output: () => output, stop: async () => {
     const exit = once(child, 'exit');
     child.kill('SIGTERM');

@@ -102,7 +102,7 @@ function refreshTray() {
   }
   traySignature = signature;
   trayMenu = Menu.buildFromTemplate([
-    { label: `Practice Timer · desktop beta`, enabled: false },
+    { label: 'Practice Timer', enabled: false },
     { id: 'phase-status', label: description, enabled: false },
     ...(status.task ? [{ label: status.task, enabled: false }] : []),
     { type: 'separator' },
@@ -145,7 +145,7 @@ async function start() {
   }
   server = await serve(ROOT);
   window = new BrowserWindow({
-    title: 'Practice Timer · desktop beta', width: 1100, height: 820, minWidth: 360, minHeight: 500,
+    title: 'Practice Timer', width: 1100, height: 820, minWidth: 360, minHeight: 500,
     show: false, backgroundColor: '#fbf5ef', icon: path.join(ROOT, 'stopwatch-dock-icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true, backgroundThrottling: false, spellcheck: false },

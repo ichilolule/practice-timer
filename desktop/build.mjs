@@ -39,7 +39,7 @@ try {
     platform: 'darwin', arch: process.arch, electronVersion: manifest.devDependencies.electron,
     appBundleId: 'io.github.ichilolule.practice-timer', appVersion: manifest.version, icon,
     asar: true, prune: false, overwrite: true,
-    extendInfo: { NSHumanReadableCopyright: 'Practice Timer desktop beta',
+    extendInfo: { NSHumanReadableCopyright: 'Practice Timer',
       NSQuitAlwaysKeepsWindows: false },
   });
   const next = path.join(output, 'Practice Timer.app');
