@@ -4,6 +4,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { createStorage, atomicWrite, readText, checkState } = require('./storage.cjs');
 const { serve } = require('./server.cjs');
+const { createNativeSounds } = require('./native-sounds.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DEFAULT_SHORTCUTS = { toggle: 'Command+Shift+Space', end: 'Command+Shift+Enter' };
@@ -17,6 +18,7 @@ let status = { status: 'ready', phase: 'work', time: '00:00', task: '', canStart
 let shortcuts = { ...DEFAULT_SHORTCUTS }, registration = {};
 let suspendedAt = null;
 let recordingShortcut = false, endDialogOpen = false, trayMenu, traySignature;
+let nativeSounds;
 const allowedFiles = new Map();
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -36,7 +38,7 @@ function showWindow(settings = false) {
 function send(type, extra = {}) {
   if (ready && !window.isDestroyed()) window.webContents.send('desktop:command', { type, ...extra });
 }
-async function endSession() {
+async function endSession(source = 'menu') {
   if (status.status === 'ready' || quitPending || recordingShortcut || endDialogOpen) return;
   endDialogOpen = true;
   try {
@@ -44,14 +46,15 @@ async function endSession() {
       type: 'question', message: 'End this session?', detail: 'Your work time will be recorded.',
       buttons: ['End session', 'Cancel'], defaultId: 1, cancelId: 1,
     });
-    if (response === 0) send('end');
+    if (response === 0) send('end', { source });
   } finally { endDialogOpen = false; }
 }
-function toggle() {
+function toggle(source = 'menu') {
   if (quitPending || recordingShortcut || endDialogOpen) return;
   if (status.status === 'ready' && !status.canStart) showWindow(true);
-  else send('toggle');
+  else send('toggle', { source });
 }
+function shortcutAction(key) { return () => key === 'toggle' ? toggle('shortcut') : endSession('shortcut'); }
 function setShortcuts(next) {
   if (!next || !['toggle', 'end'].every(key => typeof next[key] === 'string' &&
       /^(?:(?:Command|Control|Alt|Shift)\+)+(?:[A-Z0-9]|Space|Enter|Period|Comma|F(?:[1-9]|1[0-2]))$/.test(next[key]) &&
@@ -60,7 +63,7 @@ function setShortcuts(next) {
   }
   const previous = { ...shortcuts };
   const register = values => Object.fromEntries(Object.entries(values).map(([key, accelerator]) =>
-    [key, globalShortcut.register(accelerator, key === 'toggle' ? toggle : endSession)]));
+    [key, globalShortcut.register(accelerator, shortcutAction(key))]));
   globalShortcut.unregisterAll();
   let result;
   try { result = register(next); } catch { result = {}; }
@@ -77,7 +80,7 @@ function setRecording(active) {
   recordingShortcut = active;
   if (active) globalShortcut.unregisterAll();
   else for (const [key, accelerator] of Object.entries(shortcuts)) {
-    try { registration[key] = globalShortcut.register(accelerator, key === 'toggle' ? toggle : endSession); }
+    try { registration[key] = globalShortcut.register(accelerator, shortcutAction(key)); }
     catch { registration[key] = false; }
   }
 }
@@ -108,8 +111,8 @@ function refreshTray() {
     { type: 'separator' },
     { label: 'Show timer', click: () => showWindow() },
     { label: status.status === 'running' ? 'Pause' : status.status === 'paused' ? 'Resume' : 'Start',
-      enabled: ready && !quitPending, click: toggle },
-    { label: 'End session…', enabled: ready && status.status !== 'ready' && !quitPending, click: endSession },
+      enabled: ready && !quitPending, click: () => toggle() },
+    { label: 'End session…', enabled: ready && status.status !== 'ready' && !quitPending, click: () => endSession() },
     { type: 'separator' },
     { label: 'Settings…', click: () => showWindow(true) },
     { label: 'Export JSON…', enabled: ready, click: () => send('export') },
@@ -132,6 +135,7 @@ function handle(channel, callback) {
 
 async function start() {
   storage = createStorage(app.getPath('userData'));
+  nativeSounds = createNativeSounds();
   try { preferences = storage.readSettings(); }
   catch (error) { throw new Error(`Desktop settings could not be read. Your data was kept. ${error.message}`); }
   for (const target of preferences.targets || []) {
@@ -140,7 +144,7 @@ async function start() {
   shortcuts = preferences.shortcuts || shortcuts;
   // A conflict at launch must not prevent the app itself from opening.
   for (const [key, accelerator] of Object.entries(shortcuts)) {
-    try { registration[key] = globalShortcut.register(accelerator, key === 'toggle' ? toggle : endSession); }
+    try { registration[key] = globalShortcut.register(accelerator, shortcutAction(key)); }
     catch { registration[key] = false; }
   }
   server = await serve(ROOT);
@@ -207,6 +211,8 @@ async function start() {
     dialog.showErrorBox('Data could not be saved', 'The app was kept open. Export a JSON backup before quitting.');
   });
   handle('desktop:settings', publicSettings);
+  handle('desktop:sounds', () => nativeSounds.list());
+  handle('desktop:play-sound', (id, volume, pitch) => nativeSounds.play(id, volume, pitch));
   ipcMain.on('desktop:shortcut-recording', (event, active) => { if (trusted(event)) setRecording(active === true); });
   handle('desktop:shortcuts', next => {
     const previous = { ...shortcuts };
@@ -273,4 +279,4 @@ app.on('before-quit', event => {
     dialog.showErrorBox('Practice Timer is not responding', 'The app was kept open so that unsaved work is not discarded.');
   }, 10_000);
 });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); tray?.destroy(); server?.close(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); nativeSounds?.stop(); tray?.destroy(); server?.close(); });

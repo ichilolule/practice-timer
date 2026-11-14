@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -262,7 +262,135 @@ test('desktop security: imported markup, denied browser permissions, foreign win
   assert.equal((await foreign.evaluate(value => practiceDesktop.saveState(value), JSON.stringify(initial))).ok, false);
   await assert.rejects(foreign.evaluate(() => practiceDesktop.readBackupTargets()), /Untrusted request/);
   await assert.rejects(foreign.evaluate(() => practiceDesktop.settings()), /Untrusted request/);
+  await assert.rejects(foreign.evaluate(() => practiceDesktop.sounds()), /Untrusted request/);
+  await assert.rejects(foreign.evaluate(() => practiceDesktop.playSound('mac:Glass.aiff', 1, 0)), /Untrusted request/);
   await foreign.close();
   assert.equal((await state(page)).tasks[0].title, payload);
   await quit(app);
+});
+
+
+test('sound choices, all installed Mac sounds, independent volumes and successful global shortcuts', { timeout: 120_000 }, async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-sounds-'));
+  await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify(fixture));
+  let app = await launch(directory);
+  t.after(async () => {
+    if (app) app.process().kill('SIGKILL');
+    await rm(directory, { recursive: true, force: true });
+  });
+  let page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await command(app, 'settings');
+  await page.waitForSelector('#shortcut-sounds:visible');
+  await page.waitForFunction(() => document.querySelector('#sound-work optgroup[label="Mac sounds"]'));
+  const sounds = await page.evaluate(() => practiceDesktop.sounds());
+  const installed = (await readdir('/System/Library/Sounds')).filter(name => /\.(aiff?|wav|caf|m4a|mp3)$/i.test(name)).sort();
+  assert.deepEqual(sounds.map(sound => sound.id), installed.map(name => `mac:${name}`));
+  assert.ok(sounds.length > 0);
+  for (const event of ['work', 'rest', 'start', 'pause', 'resume', 'end']) {
+    assert.equal(await page.locator(`#sound-${event} option`).count(), sounds.length + 5);
+  }
+  await assert.rejects(page.evaluate(() => practiceDesktop.playSound('mac:../../secret.aiff', 10, 0)), /Invalid Mac sound/);
+  await assert.rejects(page.evaluate(() => practiceDesktop.playSound('mac:Glass.aiff', 101, 0)), /Invalid Mac sound/);
+  async function volume(id, value) {
+    await page.locator(`#${id}`).evaluate((element, value) => {
+      element.value = String(value);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    }, value);
+  }
+  await volume('sound-volume', 1);
+  // Real audio rendering verifies the four generated timbres are distinct and unclipped.
+  const rendered = await page.evaluate(async () => {
+    const result = [];
+    for (const id of ['wood', 'bell', 'water', 'electronic']) {
+      const context = new OfflineAudioContext(1, 88_200, 44_100);
+      PracticeSounds.synthesize(context, id, 'work', 500, 12);
+      const samples = (await context.startRendering()).getChannelData(0);
+      let peak = 0, energy = 0;
+      for (const value of samples) { peak = Math.max(peak, Math.abs(value)); energy += value * value; }
+      result.push({ id, peak, energy });
+    }
+    return result;
+  });
+  assert.ok(rendered.every(sound => sound.peak > 0.01 && sound.peak < 1 && sound.energy > 0));
+  assert.equal(new Set(rendered.map(sound => sound.energy)).size, 4);
+  for (const id of ['wood', 'bell', 'water', 'electronic', ...sounds.map(sound => sound.id)]) {
+    await page.selectOption('#sound-work', id);
+    await page.locator('#preview-work').click();
+    await page.waitForFunction(() => !document.getElementById('preview-work').disabled);
+    assert.equal(await page.locator('#sound-status').textContent(), '');
+  }
+  await page.selectOption('#sound-work', 'bell');
+  await page.selectOption('#sound-rest', sounds[0].id);
+  for (const [event, id] of Object.entries({ start: 'wood', pause: 'water', resume: 'electronic', end: 'bell' })) {
+    await page.selectOption(`#sound-${event}`, id);
+  }
+  await volume('sound-volume', 0);
+  await volume('sound-operation-volume', 1);
+  assert.equal(await page.locator('#preview-work').isDisabled(), true);
+  assert.equal(await page.locator('#preview-start').isDisabled(), false);
+  await page.locator('#sound-work').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '/private/tmp/practice-timer-sound-settings.png' });
+  await page.evaluate(() => {
+    globalThis.playedNotes = 0;
+    const original = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function (...args) { playedNotes++; return original.apply(this, args); };
+  });
+  await app.evaluate(({ globalShortcut }) => {
+    globalThis.soundShortcutCallbacks = new Map();
+    const original = globalShortcut.register;
+    globalShortcut.register = (key, callback) => { soundShortcutCallbacks.set(key, callback); return original.call(globalShortcut, key, callback); };
+  });
+  const shortcuts = { toggle: 'Control+Alt+Shift+F11', end: 'Control+Alt+Shift+F12' };
+  assert.equal((await page.evaluate(value => practiceDesktop.setShortcuts(value), shortcuts)).ok, true);
+  const press = key => app.evaluate((_electron, key) => globalThis.soundShortcutCallbacks.get(key)(), key);
+  await page.locator('#nav-timer').click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
+  await press(shortcuts.toggle);
+  await page.waitForFunction(() => document.getElementById('main-action').getAttribute('aria-label') === 'Pause');
+  await page.waitForFunction(() => playedNotes === 4);
+  await press(shortcuts.toggle);
+  await page.waitForFunction(() => document.getElementById('main-action').getAttribute('aria-label') === 'Resume');
+  await page.waitForFunction(() => playedNotes === 5);
+  await press(shortcuts.toggle);
+  await page.waitForFunction(() => document.getElementById('main-action').getAttribute('aria-label') === 'Pause');
+  await page.waitForFunction(() => playedNotes === 7);
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+  await press(shortcuts.end);
+  assert.equal(await page.evaluate(() => playedNotes), 7);
+  assert.notEqual((await state(page)).run, null);
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0 }); });
+  await press(shortcuts.end);
+  await page.waitForFunction(() => playedNotes === 16);
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run === null);
+  const savedSound = (await state(page)).sound;
+  assert.equal(savedSound.volume, 0);
+  assert.equal(savedSound.operationVolume, 5);
+  // Incomplete routines show settings without playing a successful-start sound.
+  await command(app, 'settings');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
+  await page.locator('#step-list .step-delete').first().click();
+  await page.locator('#step-list .step-delete').first().click();
+  await press(shortcuts.toggle);
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => playedNotes), 16);
+  assert.equal((await state(page)).run, null);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(360, 740));
+  await page.waitForFunction(() => innerWidth === 360);
+  await page.locator('#sound-work').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '/private/tmp/practice-timer-sound-small.png' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await quit(app); app = null;
+  app = await launch(directory); page = await app.firstWindow();
+  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await command(app, 'settings');
+  await page.waitForSelector('#shortcut-sounds:visible');
+  assert.deepEqual((await state(page)).sound, savedSound);
+  assert.equal(await page.locator('#sound-pause').inputValue(), 'water');
+  assert.equal(await page.locator('#sound-rest').inputValue(), sounds[0].id);
+  assert.deepEqual(errors, []);
+  await quit(app); app = null;
 });

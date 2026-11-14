@@ -65,6 +65,12 @@ test('hardened release starts normally despite injection flags, saves and restor
   assert.equal(await running.page.evaluate(() => typeof window.require), 'undefined');
   await assert.rejects(readFile(marker), { code: 'ENOENT' });
   assert.doesNotMatch(running.output(), /Debugger listening on/);
+  const sounds = await running.page.evaluate(() => practiceDesktop.sounds());
+  assert.ok(sounds.length > 0);
+  await running.page.evaluate(id => practiceDesktop.playSound(id, 1, 0), sounds[0].id);
+  await running.page.locator('#settings-toggle').click();
+  await running.page.selectOption('#sound-work', sounds[0].id);
+  await running.page.locator('#nav-timer').click();
   await running.page.locator('#main-action').click();
   await running.page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run?.remainingMs < 1_499_000);
   await running.page.locator('#main-action').click();
@@ -72,6 +78,8 @@ test('hardened release starts normally despite injection flags, saves and restor
   await running.stop(); running = null;
   running = await launch(profile);
   assert.equal(await running.page.locator('#main-action').getAttribute('aria-label'), 'Resume');
+  await running.page.locator('#settings-toggle').click();
+  assert.equal(await running.page.locator('#sound-work').inputValue(), sounds[0].id);
   const permissions = await running.page.evaluate(async () => (await navigator.permissions.query({ name: 'clipboard-read' })).state);
   assert.equal(permissions, 'denied');
   await running.stop(); running = null;

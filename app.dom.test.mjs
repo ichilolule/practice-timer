@@ -80,7 +80,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     URL: { createObjectURL(blob) { exportedBlob = blob; return 'blob:test'; }, revokeObjectURL() {} },
     Date: FakeDate,
   });
-  for (const file of ['timer-core.js', 'practice-data.js', 'backup-files.js', 'app.js']) {
+  for (const file of ['timer-core.js', 'practice-data.js', 'backup-files.js', 'sound-engine.js', 'app.js']) {
     if (file === 'app.js') configureBackup?.(context);
     vm.runInContext(readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), context);
   }
@@ -216,7 +216,7 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   assert.equal(audio.notes.length, 2);
   assert.deepEqual(audio.notes.map(note => note.frequency.value), [1320, 1760]);
   assert.equal(audio.gains[0][1].value, 0.08);
-  assert.equal(audio.notes[1].stoppedAt, 0.48);
+  assert.ok(Math.abs(audio.notes[1].stoppedAt - 0.48) < 1e-9);
   assert.equal(elements.get('preview-rest').disabled, true);
   await elements.get('preview-rest').trigger('click');
   assert.equal(audio.notes.length, 2);
@@ -242,7 +242,10 @@ test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で�
   assert.equal(boosted.get('sound-volume').value, '100');
   await elements.get('backup-save').trigger('click');
   const backup = JSON.parse(await app.exportedBlob.text());
-  assert.deepEqual(backup.sound, { volume: 500, pitch: 12 });
+  assert.equal(backup.sound.volume, 500);
+  assert.equal(backup.sound.pitch, 12);
+  assert.equal(backup.sound.operationVolume, 50);
+  assert.equal(backup.sound.assignments.work, 'electronic');
   backup.sound = { volume: 35, pitch: -12 };
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
   await elements.get('import-file').trigger('change');
@@ -300,6 +303,39 @@ test('音の設定を含まない旧バックアップは標準音を使い、�
   await elements.get('preview-rest').trigger('click');
   assert.match(elements.get('sound-status').textContent, /Could not play sound/);
   assert.equal(elements.get('preview-rest').disabled, false);
+});
+
+test('音の割り当てを自動保存し、Webで使えないMac音も保持して電子音で試聴する', async () => {
+  const audio = recordAudio();
+  const app = mount(new Map(), audio.AudioContext);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  elements.get('sound-work').value = 'bell';
+  await elements.get('sound-work').trigger('change');
+  elements.get('sound-rest').value = 'none';
+  await elements.get('sound-rest').trigger('change');
+  const restored = mount(app.storage);
+  await restored.elements.get('settings-toggle').trigger('click');
+  assert.equal(restored.elements.get('sound-work').value, 'bell');
+  assert.equal(restored.elements.get('preview-rest').disabled, true);
+  await elements.get('backup-save').trigger('click');
+  const backup = JSON.parse(await app.exportedBlob.text());
+  backup.sound.assignments.work = 'mac:Glass.aiff';
+  backup.sound.operationVolume = 25;
+  elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
+  await elements.get('import-file').trigger('change');
+  assert.equal(elements.get('sound-work').value, 'mac:Glass.aiff');
+  assert.match(elements.get('sound-availability').textContent, /unavailable/);
+  await elements.get('preview-work').trigger('click');
+  assert.equal(audio.notes.length, 2);
+  await elements.get('backup-save').trigger('click');
+  assert.equal(JSON.parse(await app.exportedBlob.text()).sound.assignments.work, 'mac:Glass.aiff');
+  assert.equal(JSON.parse(await app.exportedBlob.text()).sound.operationVolume, 25);
+  const saved = app.storage.get('practice-timer-v1');
+  backup.sound.assignments.work = 'mac:../../secret.aiff';
+  await elements.get('import-file').trigger('change');
+  assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
+  assert.equal(app.storage.get('practice-timer-v1'), saved);
 });
 
 function buttonNamed(element, label) {

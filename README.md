@@ -2,7 +2,7 @@
 
 イラストの練習・制作で、作業と休憩を切り替えながら実作業時間を記録するアプリです。タスクをテーマ・サブテーマに分類し、期間別に振り返れます。
 
-このREADMEは、利用者向けの操作説明と、web版ChatGPTなどにJSONの分析・編集や練習案の提案を依頼するための仕様書を兼ねています。**ChatGPTには、このREADMEと最新の `practice-timer.json` を添付して使えます。** 仕様の確認基準は、このリポジトリの `app.js`、`timer-core.js`、`practice-data.js` です（2026-11-14確認）。
+このREADMEは、利用者向けの操作説明と、web版ChatGPTなどにJSONの分析・編集や練習案の提案を依頼するための仕様書を兼ねています。**ChatGPTには、このREADMEと最新の `practice-timer.json` を添付して使えます。** 仕様の確認基準は、このリポジトリの `app.js`、`timer-core.js`、`practice-data.js`、`sound-engine.js` です（2026-11-15確認）。
 
 ## 公開先
 
@@ -20,6 +20,9 @@ Web版と同じ画面・タイマー計算・JSON形式を使う、Electron製�
 - ウィンドウの閉じるボタンと `⌘W` は画面を隠します。計測とメニューバー表示は続きます。
 - 初期ショートカットは **`⌘⇧Space`：開始・一時停止・再開**、**`⌘⇧Return`：セッション終了**。別アプリの操作中も使えます。ショートカットによるセッション終了には確認画面が出ます。
 - Settings → 左列下部のShortcut keysで、入力欄を選んで新しいキーの組み合わせを押すと変更・保存できます。競合するキーはエラーを表示し、直前の設定を保ちます。設定欄でキーを記録している間はタイマー操作を止めます。
+- Settings → Soundで、作業開始・休憩開始、およびショートカットによる開始・一時停止・再開・終了の音を個別に選べます。Wood（木琴風）・Bell（ベル）・Water（水滴）・Electronic（電子音）・None（無音）と、このMacの標準音が候補です。各欄の▶で試聴でき、選択は自動保存します。Alertsは切り替え通知、Shortcut soundsのVolumeは操作音の音量です。
+- ショートカット開始時は操作音だけを鳴らし、作業・休憩開始の通知音と重ねません。設定不足で開始できない場合、終了確認のCancel、キー設定の記録中、スリープ・アプリ終了による自動停止では操作音を鳴らしません。画面のボタンやメニューバー操作もショートカット操作音の対象外です。
+- 4種類のアプリ音はアプリ内で生成します。Mac標準音は `/System/Library/Sounds` の実在する音を起動時に一覧化して再生し、アプリ内やJSONに音源を複製しません。Pitchは全音に適用し、Mac標準音は高さとともに再生速度も変わります。利用できないMac音を含むJSONを別のMacやWeb版へ読み込んだ場合は、選択を保ったまま電子音で代用し、その旨をSoundに表示します。
 - メニューバーの「Quit Practice Timer」または `⌘Q` でアプリを終了します。終了時は計測を一時停止して保存し、次回は一時停止状態で復元します。Macのスリープ時も一時停止します。Macログイン時の自動起動は設定していません。
 
 ### 保存とWeb版からの移行
@@ -118,10 +121,10 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
 | `totalWorkMs` | 累計実作業時間、ミリ秒。計測途中ならその作業時間も含む。 |
 | `run` | 計測なしなら `null`。計測途中なら後述のオブジェクト。 |
 | `selectedTaskId` | 選択中のタスクID、または `null`。新規データは `null` を推奨。存在しないIDや、計測途中ではないときの完了済みタスクIDは、読み込み時に `null` になる。 |
-| `sound` | `volume` と `pitch` を持つ通知音設定。 |
+| `sound` | `volume`・`operationVolume`・`pitch`・`assignments` を持つ音の設定。 |
 | `dayStartMinutes` | 1日の区切り。午前0時からの分数、整数 `0`〜`1439`。初期値 `300`（5:00）。 |
 
-`format`、`version`、`steps`、`groups`、`tasks`、`sessions`、`totalWorkMs` は必須です。読み込み時、`run` と `selectedTaskId` の省略は計測・選択なし、`sound` の省略／`null` は `{"volume":100,"pitch":0}`、`dayStartMinutes` の省略は `300` として扱います。新しく生成するJSONには全キーを明示してください。未知の独自キーは読み込み後の保存で保持されないため、専用項目を勝手に増やさないでください。
+`format`、`version`、`steps`、`groups`、`tasks`、`sessions`、`totalWorkMs` は必須です。読み込み時、`run` と `selectedTaskId` の省略は計測・選択なし、`sound` の省略／`null` は通知音量100・操作音量50・高さ0と既定の音割り当て、`dayStartMinutes` の省略は `300` として扱います。新しく生成するJSONには全キーを明示してください。未知の独自キーは読み込み後の保存で保持されないため、専用項目を勝手に増やさないでください。
 
 ### ID・日時・単位の共通ルール
 
@@ -206,7 +209,10 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
 ### 音：`sound`
 
 - `volume` は整数 `0`〜`500`。**画面の音量0〜100%とは尺度が違い、JSON値 = 画面の% × 5** です。画面20%は `100`、画面100%は `500`、消音は `0`。初期値は `100`。
+- `operationVolume` はショートカット操作音の音量。同じ尺度の整数 `0`〜`500`。省略時は `50`（画面10%）。通知音の `volume` とは独立しています。
 - `pitch` は整数 `-12`〜`12`、半音単位。初期値は `0`。
+- `assignments` は `work`（作業開始）・`rest`（休憩開始）・`start`・`pause`・`resume`・`end` の6項目を持つオブジェクトです。各値は `wood`・`bell`・`water`・`electronic`・`none`、または `mac:Glass.aiff` のようなMac音のIDです。Mac音のIDにはファイル名だけを含め、パスは使いません。
+- `assignments` 全体や各項目を省略した場合、`work`・`rest` は `electronic`、`start`・`pause`・`resume` は `wood`、`end` は `bell` になります。従来の `volume`・`pitch` だけのJSONも読み込めます。新しく書き出すJSONは6項目と `operationVolume` を含みます。
 
 ## JSONを分析するときの集計ルール
 
@@ -253,7 +259,15 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
   "totalWorkMs": 0,
   "run": null,
   "selectedTaskId": null,
-  "sound": { "volume": 100, "pitch": 0 },
+  "sound": {
+    "volume": 100,
+    "operationVolume": 50,
+    "pitch": 0,
+    "assignments": {
+      "work": "electronic", "rest": "electronic",
+      "start": "wood", "pause": "wood", "resume": "wood", "end": "bell"
+    }
+  },
   "dayStartMinutes": 300
 }
 ```
@@ -325,7 +339,7 @@ Dayの「Sessions」は時刻・鉛筆アイコン・タスク名・作業時間
 
 旧形式の記録には開始時刻がないため、「開始時刻なし」と表示し、終了時刻が属する集計日に合計します。時間帯を特定できないため日の24時間グラフには含めず、グラフの下に別掲します。日の合計・テーマタブの集計・週月年のグラフには含まれます。必要ならその記録の日時と作業時間を修正できます。振り返りメモはアプリには保存しません。
 
-Settingsは幅401px以上で左にRoutine・Day starts、右にNotifications・Sound・Backupの2列構成です。400px以下ではRoutineからBackupまで1列に並べます。音量・高さの下にWork／Breakの試聴ボタンを置き、小窓では縦に並べて操作範囲を保ちます。NotificationsのOn／Off／Blocked／Unavailableは実際のブラウザ許可を示し、画面を開いたときやウィンドウに戻ったときに更新します。OSの通知抑制や集中モードの状態を示すものではありません。
+Settingsは幅401px以上で左にRoutine・Day starts、右にNotifications・Sound・Backupの2列構成です。400px以下ではRoutineからBackupまで1列に並べます。音量・高さの下に場面ごとの音の選択欄と試聴ボタンを並べます。Mac版ではその下にShortcut soundsを表示します。小窓でも選択欄が縮み、試聴ボタンの操作範囲を保ちます。NotificationsのOn／Off／Blocked／Unavailableは実際のブラウザ許可を示し、画面を開いたときやウィンドウに戻ったときに更新します。OSの通知抑制や集中モードの状態を示すものではありません。
 
 Settingsから、画像を含まないJSONを保存・読み込みできます。読み込みは現在のデータを置き換え、計測中は実行できません。通知の確認には、ブラウザが通知を許可できる環境が必要です。
 

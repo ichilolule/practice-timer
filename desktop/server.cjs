@@ -2,7 +2,7 @@
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const ASSETS = new Set(['index.html', 'styles.css', 'app.js', 'timer-core.js', 'practice-data.js', 'backup-files.js',
+const ASSETS = new Set(['index.html', 'styles.css', 'app.js', 'timer-core.js', 'practice-data.js', 'backup-files.js', 'sound-engine.js',
   'manifest.json', 'favicon-32.png', 'apple-touch-icon.png', 'stopwatch-dock-icon-192.png', 'stopwatch-dock-icon-512.png']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png' };
