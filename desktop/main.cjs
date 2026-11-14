@@ -7,7 +7,7 @@ const { serve } = require('./server.cjs');
 const { createNativeSounds } = require('./native-sounds.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const DEFAULT_SHORTCUTS = { toggle: 'Command+Shift+Space', end: 'Command+Shift+Enter' };
+const DEFAULT_SHORTCUTS = { toggle: 'Command+Shift+Space', skip: 'Command+Shift+Right', end: 'Command+Shift+Enter' };
 app.setName('Practice Timer');
 // Tests use a separate directory and never import or overwrite the user's data.
 if (process.env.PRACTICE_TIMER_DATA_DIR) app.setPath('userData', path.resolve(process.env.PRACTICE_TIMER_DATA_DIR));
@@ -19,6 +19,7 @@ let shortcuts = { ...DEFAULT_SHORTCUTS }, registration = {};
 let suspendedAt = null;
 let recordingShortcut = false, endDialogOpen = false, trayMenu, traySignature;
 let nativeSounds;
+let trayIcons, trayPhase;
 const allowedFiles = new Map();
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -38,7 +39,7 @@ function showWindow(settings = false) {
 function send(type, extra = {}) {
   if (ready && !window.isDestroyed()) window.webContents.send('desktop:command', { type, ...extra });
 }
-async function endSession(source = 'menu') {
+async function endSession() {
   if (status.status === 'ready' || quitPending || recordingShortcut || endDialogOpen) return;
   endDialogOpen = true;
   try {
@@ -46,20 +47,24 @@ async function endSession(source = 'menu') {
       type: 'question', message: 'End this session?', detail: 'Your work time will be recorded.',
       buttons: ['End session', 'Cancel'], defaultId: 1, cancelId: 1,
     });
-    if (response === 0) send('end', { source });
+    if (response === 0) send('end');
   } finally { endDialogOpen = false; }
 }
-function toggle(source = 'menu') {
+function toggle() {
   if (quitPending || recordingShortcut || endDialogOpen) return;
   if (status.status === 'ready' && !status.canStart) showWindow(true);
-  else send('toggle', { source });
+  else send('toggle');
 }
-function shortcutAction(key) { return () => key === 'toggle' ? toggle('shortcut') : endSession('shortcut'); }
+function skip() {
+  if (status.status === 'ready' || quitPending || recordingShortcut || endDialogOpen) return;
+  send('skip');
+}
+function shortcutAction(key) { return { toggle, skip, end: endSession }[key]; }
 function setShortcuts(next) {
-  if (!next || !['toggle', 'end'].every(key => typeof next[key] === 'string' &&
-      /^(?:(?:Command|Control|Alt|Shift)\+)+(?:[A-Z0-9]|Space|Enter|Period|Comma|F(?:[1-9]|1[0-2]))$/.test(next[key]) &&
-      /(?:Command|Control|Alt)\+/.test(next[key])) || next.toggle === next.end) {
-    throw new Error('Choose two different shortcuts with modifier keys.');
+  if (!next || !['toggle', 'skip', 'end'].every(key => typeof next[key] === 'string' &&
+      /^(?:(?:Command|Control|Alt|Shift)\+)+(?:[A-Z0-9]|Space|Enter|Period|Comma|Right|Left|Up|Down|F(?:[1-9]|1[0-2]))$/.test(next[key]) &&
+      /(?:Command|Control|Alt)\+/.test(next[key])) || new Set([next.toggle, next.skip, next.end]).size !== 3) {
+    throw new Error('Choose three different shortcuts with modifier keys.');
   }
   const previous = { ...shortcuts };
   const register = values => Object.fromEntries(Object.entries(values).map(([key, accelerator]) =>
@@ -67,12 +72,12 @@ function setShortcuts(next) {
   globalShortcut.unregisterAll();
   let result;
   try { result = register(next); } catch { result = {}; }
-  if (!result.toggle || !result.end) {
+  if (!Object.keys(DEFAULT_SHORTCUTS).every(key => result[key])) {
     globalShortcut.unregisterAll(); registration = register(previous);
     if (recordingShortcut) globalShortcut.unregisterAll();
     throw new Error('That shortcut is in use or unavailable. The previous shortcuts were kept.');
   }
-  shortcuts = { ...next }; registration = result;
+  shortcuts = Object.fromEntries(Object.keys(DEFAULT_SHORTCUTS).map(key => [key, next[key]])); registration = result;
   if (recordingShortcut) globalShortcut.unregisterAll();
 }
 function setRecording(active) {
@@ -93,6 +98,8 @@ function checkedFile(id) {
 }
 function refreshTray() {
   if (!tray) return;
+  const iconPhase = status.status !== 'ready' && status.phase === 'rest' ? 'rest' : 'work';
+  if (trayPhase !== iconPhase) { tray.setImage(trayIcons[iconPhase]); trayPhase = iconPhase; }
   const phase = status.phase === 'rest' ? 'Break' : 'Work';
   const prefix = status.status === 'paused' ? 'Ⅱ ' : status.status === 'running' ? '' : '○ ';
   tray.setTitle(`${prefix}${status.time}`, { fontType: 'monospacedDigit' });
@@ -112,6 +119,7 @@ function refreshTray() {
     { label: 'Show timer', click: () => showWindow() },
     { label: status.status === 'running' ? 'Pause' : status.status === 'paused' ? 'Resume' : 'Start',
       enabled: ready && !quitPending, click: () => toggle() },
+    { label: 'Next phase (skip)', enabled: ready && status.status !== 'ready' && !quitPending, click: skip },
     { label: 'End session…', enabled: ready && status.status !== 'ready' && !quitPending, click: () => endSession() },
     { type: 'separator' },
     { label: 'Settings…', click: () => showWindow(true) },
@@ -141,7 +149,7 @@ async function start() {
   for (const target of preferences.targets || []) {
     if (typeof target.fileId === 'string' && typeof target.path === 'string') allowedFiles.set(target.fileId, target.path);
   }
-  shortcuts = preferences.shortcuts || shortcuts;
+  shortcuts = { ...DEFAULT_SHORTCUTS, ...preferences.shortcuts };
   // A conflict at launch must not prevent the app itself from opening.
   for (const [key, accelerator] of Object.entries(shortcuts)) {
     try { registration[key] = globalShortcut.register(accelerator, shortcutAction(key)); }
@@ -154,10 +162,13 @@ async function start() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true, backgroundThrottling: false, spellcheck: false },
   });
-  // A monochrome stopwatch remains legible in both light and dark menu bars.
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png'));
-  icon.setTemplateImage(true);
-  tray = new Tray(icon);
+  // Template images adapt to light and dark menu bars; paused breaks keep the cup.
+  trayIcons = Object.fromEntries([['work', 'trayTemplate.png'], ['rest', 'breakTrayTemplate.png']].map(([phase, name]) => {
+    const icon = nativeImage.createFromPath(path.join(__dirname, name));
+    icon.setTemplateImage(true);
+    return [phase, icon];
+  }));
+  tray = new Tray(trayIcons.work);
   refreshTray();
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Practice Timer', submenu: [
@@ -212,7 +223,7 @@ async function start() {
   });
   handle('desktop:settings', publicSettings);
   handle('desktop:sounds', () => nativeSounds.list());
-  handle('desktop:play-sound', (id, volume, pitch) => nativeSounds.play(id, volume, pitch));
+  handle('desktop:play-sound', (id, volume) => nativeSounds.play(id, volume));
   ipcMain.on('desktop:shortcut-recording', (event, active) => { if (trusted(event)) setRecording(active === true); });
   handle('desktop:shortcuts', next => {
     const previous = { ...shortcuts };

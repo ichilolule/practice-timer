@@ -97,7 +97,7 @@ function recordAudio() {
     constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
     async resume() {}
     createOscillator() {
-      const note = { frequency: { value: 0 }, connect() { return this; },
+      const note = { frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() { return this; },
         start(at) { this.startedAt = at; }, stop(at) { this.stoppedAt = at; } };
       notes.push(note);
       return note;
@@ -201,69 +201,45 @@ test('ローカルデータが壊れている間は直接保存を止め、有�
   assert.match(app.elements.get('backup-status').textContent, /JSON imported/);
 });
 
-test('通知音の音量・高さを共通設定し、休憩音を1.3倍速で試聴できる', async () => {
+test('共通音量と固定名の音を保存・試聴し、Alerts・Pitch・作業休憩音は置かない', async () => {
   const audio = recordAudio();
   const app = mount(new Map(), audio.AudioContext);
   const { elements } = app;
   await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.has('sound-pitch'), false);
+  assert.equal(elements.has('sound-work'), false);
+  assert.equal(elements.has('shortcut-sounds'), false);
   elements.get('sound-volume').value = '10';
-  await elements.get('sound-volume').trigger('input');
   await elements.get('sound-volume').trigger('change');
-  elements.get('sound-pitch').value = '12';
-  await elements.get('sound-pitch').trigger('input');
-  await elements.get('sound-pitch').trigger('change');
-  await elements.get('preview-work').trigger('click');
-  assert.equal(audio.notes.length, 2);
-  assert.deepEqual(audio.notes.map(note => note.frequency.value), [1320, 1760]);
+  elements.get('sound-start').value = 'electronic-end';
+  await elements.get('sound-start').trigger('change');
+  await elements.get('preview-start').trigger('click');
+  assert.deepEqual(audio.notes.map(note => note.frequency.value), [880, 660, 440]);
   assert.equal(audio.gains[0][1].value, 0.08);
-  assert.ok(Math.abs(audio.notes[1].stoppedAt - 0.48) < 1e-9);
-  assert.equal(elements.get('preview-rest').disabled, true);
-  await elements.get('preview-rest').trigger('click');
-  assert.equal(audio.notes.length, 2);
+  assert.equal(elements.get('preview-pause').disabled, true);
   app.flushTimeouts();
-  await elements.get('preview-rest').trigger('click');
-  assert.equal(audio.notes.length, 5);
-  assert.deepEqual(audio.notes.slice(2).map(note => note.frequency.value), [1318.5, 1108.74, 880]);
-  assert.ok(Math.abs(audio.notes[4].stoppedAt - 0.5769230769230769) < 1e-9);
-  assert.ok(audio.notes.every(note => note.stoppedAt > note.startedAt));
-  assert.ok(audio.gains.every(events => events.every(event => event.value > 0)));
+  elements.get('sound-pause').value = 'electronic-end';
+  await elements.get('sound-pause').trigger('change');
+  await elements.get('preview-pause').trigger('click');
+  assert.deepEqual(audio.notes.slice(3).map(note => note.frequency.value), [880, 660, 440]);
   const restored = mount(app.storage).elements;
   await restored.get('settings-toggle').trigger('click');
   assert.equal(restored.get('sound-volume').value, '10');
-  assert.equal(restored.get('sound-pitch').value, '12');
-  app.flushTimeouts();
-  elements.get('sound-volume').value = '100';
-  await elements.get('sound-volume').trigger('change');
-  await elements.get('preview-work').trigger('click');
-  assert.equal(audio.gains[5][1].value, 0.8);
-  assert.ok(audio.gains[5][1].value < 1);
-  const boosted = mount(app.storage).elements;
-  await boosted.get('settings-toggle').trigger('click');
-  assert.equal(boosted.get('sound-volume').value, '100');
+  assert.equal(restored.get('sound-start').value, 'electronic-end');
   await elements.get('backup-save').trigger('click');
   const backup = JSON.parse(await app.exportedBlob.text());
-  assert.equal(backup.sound.volume, 500);
-  assert.equal(backup.sound.pitch, 12);
-  assert.equal(backup.sound.operationVolume, 50);
-  assert.equal(backup.sound.assignments.work, 'electronic');
-  backup.sound = { volume: 35, pitch: -12 };
+  assert.equal(backup.sound.volume, 50);
+  assert.equal('pitch' in backup.sound, false);
+  assert.equal('operationVolume' in backup.sound, false);
+  backup.sound.volume = 501;
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
-  await elements.get('import-file').trigger('change');
-  assert.equal(elements.get('sound-volume').value, '7');
-  assert.equal(elements.get('sound-pitch').value, '-12');
-  assert.equal(elements.get('sound-pitch').getAttribute('aria-valuetext'), '12 semitones lower than default');
-  const beforeInvalid = app.storage.get('practice-timer-v1');
-  backup.sound.pitch = 99;
+  const saved = app.storage.get('practice-timer-v1');
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
-  assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
-  backup.sound = { volume: 501, pitch: 0 };
-  await elements.get('import-file').trigger('change');
-  assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
-  assert.equal(app.storage.get('practice-timer-v1'), beforeInvalid);
+  assert.equal(app.storage.get('practice-timer-v1'), saved);
 });
 
-test('音量0は完全に消音し、音を準備できない環境でも計測を開始できる', async () => {
+test('共通音量0でボタン操作・試聴を消音し、音が使えなくても計測できる', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     steps: [{ type: 'work', minutes: 25 }, { type: 'rest', minutes: 5 }], totalWorkMs: 0,
   })]]);
@@ -272,7 +248,7 @@ test('音量0は完全に消音し、音を準備できない環境でも計測�
   await elements.get('settings-toggle').trigger('click');
   elements.get('sound-volume').value = '0';
   await elements.get('sound-volume').trigger('change');
-  assert.equal(elements.get('preview-work').disabled, true);
+  assert.equal(elements.get('preview-start').disabled, true);
   assert.equal(elements.get('sound-volume-value').textContent, '0% (muted)');
   await elements.get('nav-timer').trigger('click');
   await elements.get('main-action').trigger('click');
@@ -282,7 +258,7 @@ test('音量0は完全に消音し、音を準備できない環境でも計測�
   const audio = recordAudio();
   const muted = mount(storage, audio.AudioContext);
   await muted.elements.get('settings-toggle').trigger('click');
-  await muted.elements.get('preview-work').trigger('click');
+  await muted.elements.get('preview-start').trigger('click');
   assert.equal(audio.notes.length, 0);
   muted.elements.get('sound-volume').value = '10';
   await muted.elements.get('sound-volume').trigger('change');
@@ -291,18 +267,30 @@ test('音量0は完全に消音し、音を準備できない環境でも計測�
   assert.equal(audio.gains[0][1].value, 0.08);
 });
 
-test('音の設定を含まない旧バックアップは標準音を使い、試聴できない場合はエラーを表示する', async () => {
+test('自動で作業から休憩へ移るときは旧通知音を鳴らさない', async () => {
+  const audio = recordAudio();
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 1 }], totalWorkMs: 0,
+  })]]), audio.AudioContext);
+  await app.elements.get('main-action').trigger('click');
+  const before = audio.notes.length;
+  app.advance(6001);
+  await app.elements.get('backup-save').trigger('click');
+  assert.equal(JSON.parse(await app.exportedBlob.text()).run.phase, 'rest');
+  assert.equal(audio.notes.length, before);
+});
+
+test('旧バックアップは既定の操作音を使い、試聴できない場合はエラーを表示する', async () => {
   const storage = new Map([['practice-timer-v1', JSON.stringify({
     format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [],
     run: null, totalWorkMs: 0, selectedTaskId: null,
   })]]);
   const { elements } = mount(storage);
   await elements.get('settings-toggle').trigger('click');
-  assert.equal(elements.get('sound-volume').value, '20');
-  assert.equal(elements.get('sound-pitch').value, '0');
-  await elements.get('preview-rest').trigger('click');
+  assert.equal(elements.get('sound-volume').value, '10');
+  await elements.get('preview-start').trigger('click');
   assert.match(elements.get('sound-status').textContent, /Could not play sound/);
-  assert.equal(elements.get('preview-rest').disabled, false);
+  assert.equal(elements.get('preview-start').disabled, false);
 });
 
 test('音の割り当てを自動保存し、Webで使えないMac音も保持して電子音で試聴する', async () => {
@@ -310,29 +298,28 @@ test('音の割り当てを自動保存し、Webで使えないMac音も保持�
   const app = mount(new Map(), audio.AudioContext);
   const { elements } = app;
   await elements.get('settings-toggle').trigger('click');
-  elements.get('sound-work').value = 'bell';
-  await elements.get('sound-work').trigger('change');
-  elements.get('sound-rest').value = 'none';
-  await elements.get('sound-rest').trigger('change');
+  elements.get('sound-start').value = 'bell-pause';
+  await elements.get('sound-start').trigger('change');
+  elements.get('sound-end').value = 'none';
+  await elements.get('sound-end').trigger('change');
   const restored = mount(app.storage);
   await restored.elements.get('settings-toggle').trigger('click');
-  assert.equal(restored.elements.get('sound-work').value, 'bell');
-  assert.equal(restored.elements.get('preview-rest').disabled, true);
+  assert.equal(restored.elements.get('sound-start').value, 'bell-pause');
+  assert.equal(restored.elements.get('preview-end').disabled, true);
   await elements.get('backup-save').trigger('click');
   const backup = JSON.parse(await app.exportedBlob.text());
-  backup.sound.assignments.work = 'mac:Glass.aiff';
-  backup.sound.operationVolume = 25;
+  backup.sound.assignments.start = 'mac:Glass.aiff';
+  backup.sound.volume = 25;
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
   await elements.get('import-file').trigger('change');
-  assert.equal(elements.get('sound-work').value, 'mac:Glass.aiff');
+  assert.equal(elements.get('sound-start').value, 'mac:Glass.aiff');
   assert.match(elements.get('sound-availability').textContent, /unavailable/);
-  await elements.get('preview-work').trigger('click');
+  await elements.get('preview-start').trigger('click');
   assert.equal(audio.notes.length, 2);
   await elements.get('backup-save').trigger('click');
-  assert.equal(JSON.parse(await app.exportedBlob.text()).sound.assignments.work, 'mac:Glass.aiff');
-  assert.equal(JSON.parse(await app.exportedBlob.text()).sound.operationVolume, 25);
+  assert.equal(JSON.parse(await app.exportedBlob.text()).sound.assignments.start, 'mac:Glass.aiff');
   const saved = app.storage.get('practice-timer-v1');
-  backup.sound.assignments.work = 'mac:../../secret.aiff';
+  backup.sound.assignments.start = 'mac:../../secret.aiff';
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /Invalid sound settings/);
   assert.equal(app.storage.get('practice-timer-v1'), saved);
@@ -347,22 +334,22 @@ function buttonNamed(element, label) {
   return null;
 }
 
-test('旧版の音量は同じ大きさで引き継ぎ、高さを変えても丸めない', async () => {
-  for (const [volume, displayed] of [[300, '60'], [99, '19.8']]) {
-    const storage = new Map([['practice-timer-v1', JSON.stringify({
-      format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [],
-      run: null, totalWorkMs: 0, selectedTaskId: null, sound: { volume, pitch: 0 },
-    })]]);
-    const audio = recordAudio();
-    const { elements } = mount(storage, audio.AudioContext);
-    await elements.get('settings-toggle').trigger('click');
-    assert.equal(elements.get('sound-volume').value, displayed);
-    elements.get('sound-pitch').value = '1';
-    await elements.get('sound-pitch').trigger('change');
-    assert.equal(JSON.parse(storage.get('practice-timer-v1')).sound.volume, volume);
-    await elements.get('preview-work').trigger('click');
-    assert.ok(Math.abs(audio.gains[0][1].value - 0.16 * volume / 100) < 1e-12);
-  }
+test('旧版の操作音量と割り当てを引き継ぎ、不要になった設定は書き出さない', async () => {
+  const storage = new Map([['practice-timer-v1', JSON.stringify({
+    format: 'practice-timer-beta', version: 1, steps: [], tasks: [], groups: [], sessions: [],
+    run: null, totalWorkMs: 0, sound: { volume: 300, pitch: 12, operationVolume: 99,
+      assignments: { work: 'electronic', rest: 'electronic', start: 'water', pause: 'mac:Glass.aiff', resume: 'electronic', end: 'none' } },
+  })]]);
+  const { elements } = mount(storage);
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('sound-volume').value, '19.8');
+  assert.equal(elements.get('sound-start').value, 'water-start');
+  assert.equal(elements.get('sound-pause').value, 'mac:Glass.aiff');
+  assert.equal(elements.get('sound-resume').value, 'electronic-resume');
+  await elements.get('sound-volume').trigger('change');
+  const saved = JSON.parse(storage.get('practice-timer-v1')).sound;
+  assert.equal(saved.volume, 99);
+  assert.deepEqual(Object.keys(saved).sort(), ['assignments', 'volume']);
 });
 
 test('Routineの変更は自動保存され、画面移動と再起動後も保持する', async () => {
@@ -1084,7 +1071,7 @@ test('計測中は中央表示し、上部タイトルのポップアップか�
     groups: [{ id: 'g', title: '語学', children: [{ id: 'c', title: '発音' }] }],
     tasks: [{ id: 'task', title: '練習', firstStep: '', targetId: null, completedAt: null }],
     sessions: [], totalWorkMs: 0, run: null, selectedTaskId: 'task',
-  })]]));
+  })]]), recordAudio().AudioContext);
   const { elements } = app;
   assert.equal(elements.get('timer-layout').getAttribute('data-running'), 'false');
   await elements.get('main-action').trigger('click');

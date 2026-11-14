@@ -1366,26 +1366,21 @@ async function prepareAudio() {
   }
 }
 
-function soundVolume(event) {
-  return ['work', 'rest'].includes(event) ? soundSettings.volume : soundSettings.operationVolume;
-}
-
 async function playSound(event, isCurrent = () => true) {
-  const volume = soundVolume(event);
-  const pitch = soundSettings.pitch;
+  const volume = soundSettings.volume;
   const id = soundSettings.assignments[event];
   if (!volume || id === 'none') return 0;
   if (id.startsWith('mac:') && desktop) {
     await macSoundsReady;
     if (!isCurrent()) return 0;
     if (macSounds.some(sound => sound.id === id)) {
-      await desktop.playSound(id, volume / SOUND_VOLUME_SCALE, pitch);
+      await desktop.playSound(id, volume / SOUND_VOLUME_SCALE);
       return 0;
     }
   }
   if (audioContext?.state !== 'running' && !await prepareAudio()) throw new Error('Could not play sound.');
   if (!isCurrent()) return 0;
-  return synthesize(audioContext, id.startsWith('mac:') ? 'electronic' : id, event, volume, pitch);
+  return synthesize(audioContext, id.startsWith('mac:') ? `electronic-${event}` : id, volume);
 }
 
 function queueSound(event, isCurrent) {
@@ -1397,20 +1392,11 @@ function queueSound(event, isCurrent) {
 }
 
 function renderSoundSettings() {
-  for (const [id, value] of [['sound-volume', soundSettings.volume], ['sound-operation-volume', soundSettings.operationVolume]]) {
-    const percent = value / SOUND_VOLUME_SCALE;
-    $(id).value = String(percent);
-    $(id).style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${percent}%, var(--color-track) ${percent}%)`;
-    $(`${id}-value`).textContent = value === 0 ? '0% (muted)' : `${percent}%`;
-    $(id).setAttribute('aria-valuetext', $(`${id}-value`).textContent);
-  }
-  $('sound-pitch').value = String(soundSettings.pitch);
-  $('sound-pitch').style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${(soundSettings.pitch + 12) / 24 * 100}%, var(--color-track) ${(soundSettings.pitch + 12) / 24 * 100}%)`;
-  $('sound-pitch-value').textContent = soundSettings.pitch === 0 ? 'Default'
-    : `${soundSettings.pitch > 0 ? '＋' : '−'}${Math.abs(soundSettings.pitch)} semitones`;
-  $('sound-pitch').setAttribute('aria-valuetext', soundSettings.pitch === 0 ? 'Default'
-    : `${Math.abs(soundSettings.pitch)} semitones ${soundSettings.pitch > 0 ? 'higher' : 'lower'} than default`);
-  $('shortcut-sounds').hidden = !desktop;
+  const percent = soundSettings.volume / SOUND_VOLUME_SCALE;
+  $('sound-volume').value = String(percent);
+  $('sound-volume').style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${percent}%, var(--color-track) ${percent}%)`;
+  $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0% (muted)' : `${percent}%`;
+  $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
   let unavailable = false;
   for (const event of SOUND_EVENTS) {
     const select = $(`sound-${event}`);
@@ -1431,24 +1417,20 @@ function renderSoundSettings() {
       unavailable = true;
     }
     select.value = id;
-    $(`preview-${event}`).disabled = previewPlaying || soundVolume(event) === 0 || id === 'none';
+    $(`preview-${event}`).disabled = previewPlaying || soundSettings.volume === 0 || id === 'none';
   }
-  $('sound-availability').textContent = unavailable ? 'A selected Mac sound is unavailable here. Electronic will play instead.'
+  $('sound-availability').textContent = unavailable ? 'A selected Mac sound is unavailable here. An electronic sound will play instead.'
     : macSoundsFailed ? 'Could not load Mac sounds. App sounds are available.' : '';
 }
 
-function updateSoundSettings(id, save = false) {
-  const key = { 'sound-volume': 'volume', 'sound-operation-volume': 'operationVolume', 'sound-pitch': 'pitch' }[id];
-  soundSettings = validateSound({ ...soundSettings,
-    [key]: key === 'pitch' ? Number($(id).value) : Math.round(Number($(id).value) * SOUND_VOLUME_SCALE),
-  });
+function updateSoundSettings(save = false) {
+  soundSettings = validateSound({ ...soundSettings, volume: Math.round(Number($('sound-volume').value) * SOUND_VOLUME_SCALE) });
   renderSoundSettings();
   if (save) $('sound-status').textContent = persist() ? '' : 'Could not save sound settings.';
-  if (save && run && soundSettings.volume) void prepareAudio();
 }
 
 async function previewSound(event) {
-  if (previewPlaying || soundVolume(event) === 0 || soundSettings.assignments[event] === 'none') return;
+  if (previewPlaying || soundSettings.volume === 0 || soundSettings.assignments[event] === 'none') return;
   previewPlaying = true;
   $('sound-status').textContent = '';
   renderSoundSettings();
@@ -1480,17 +1462,14 @@ function handleEvent(event) {
   if (event.kind === 'interrupted') {
     $('status').textContent = 'Paused after a long interruption.';
   } else {
-    void queueSound(event.phase);
     notifyPhase(event.phase);
   }
   persist();
 }
 
 $('settings-toggle').addEventListener('click', showSettings);
-for (const id of ['sound-volume', 'sound-operation-volume', 'sound-pitch']) {
-  $(id).addEventListener('input', () => updateSoundSettings(id));
-  $(id).addEventListener('change', () => updateSoundSettings(id, true));
-}
+$('sound-volume').addEventListener('input', () => updateSoundSettings());
+$('sound-volume').addEventListener('change', () => updateSoundSettings(true));
 for (const event of SOUND_EVENTS) {
   $(`preview-${event}`).addEventListener('click', () => previewSound(event));
   $(`sound-${event}`).addEventListener('change', () => {
@@ -1614,7 +1593,7 @@ $('add-step').addEventListener('click', () => {
   renderSettings();
   $('step-list').lastElementChild?.querySelector('select')?.focus();
 });
-function toggleTimer(source) {
+function toggleTimer() {
   if (desktop && !localDataReadable) { showSettings(); return; }
   if (!run && !steps.length) { showSettings(); return; }
   let soundEvent;
@@ -1626,15 +1605,14 @@ function toggleTimer(source) {
     run.recordGroupId = newId();
     const startedRun = run;
     $('status').textContent = '';
-    soundEvent = source === 'shortcut' ? 'start' : run.phase;
+    soundEvent = 'start';
     isCurrent = () => run === startedRun && run.status === 'running' && run.row === 0 && !run.looping;
   } else if (run.status === 'running') {
     handleEvent(pauseRun(run, Date.now()));
-    if (source === 'shortcut') soundEvent = 'pause';
+    soundEvent = 'pause';
   } else {
-    if (soundSettings.volume) void prepareAudio();
     resumeRun(run, Date.now());
-    if (source === 'shortcut') soundEvent = 'resume';
+    soundEvent = 'resume';
   }
   const saved = persist();
   renderTimer();
@@ -1643,14 +1621,17 @@ function toggleTimer(source) {
 }
 $('main-action').addEventListener('click', toggleTimer);
 
-$('skip').addEventListener('click', () => {
+function skipTimer() {
   if (!run) return;
-  handleEvent(skipPhase(run, Date.now()));
-  persist();
+  const event = skipPhase(run, Date.now());
+  handleEvent(event);
+  const saved = persist();
   renderTimer();
-});
+  if (saved && event?.kind === 'phase') return queueSound('skip');
+}
+$('skip').addEventListener('click', skipTimer);
 
-function endTimer(source) {
+function endTimer() {
   if (!run) return;
   advanceClock(run, Date.now());
   totalWorkMs = run.totalWorkMs;
@@ -1671,7 +1652,7 @@ function endTimer(source) {
   renderTimer();
   renderTaskChoice();
   $('main-action').focus();
-  if (saved && source === 'shortcut') return queueSound('end');
+  if (saved) return queueSound('end');
 }
 $('end').addEventListener('click', endTimer);
 
@@ -1749,8 +1730,8 @@ if (desktop) {
     .finally(() => renderSoundSettings());
   $('desktop-settings').hidden = false;
   let desktopSettings;
-  const shortcutInputs = { toggle: $('desktop-shortcut-toggle'), end: $('desktop-shortcut-end') };
-  const labels = { Space: 'Space', Enter: 'Return', Period: '.', Comma: ',' };
+  const shortcutInputs = { toggle: $('desktop-shortcut-toggle'), skip: $('desktop-shortcut-skip'), end: $('desktop-shortcut-end') };
+  const labels = { Space: 'Space', Enter: 'Return', Period: '.', Comma: ',', Right: '→', Left: '←', Up: '↑', Down: '↓' };
   function showDesktopSettings(value) {
     desktopSettings = value;
     for (const [key, input] of Object.entries(shortcutInputs)) {
@@ -1774,9 +1755,10 @@ if (desktop) {
     const modifiers = [event.metaKey && 'Command', event.ctrlKey && 'Control', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
     const code = event.code || '';
     const keyName = /^(Key[A-Z]|Digit[0-9])$/.test(code) ? code.replace(/^(Key|Digit)/, '')
+      : /^Arrow(Right|Left|Up|Down)$/.test(code) ? code.slice(5)
       : ['Space', 'Enter', 'Period', 'Comma'].includes(code) || /^F([1-9]|1[0-2])$/.test(code) ? code : null;
     if (!modifiers.some(part => part !== 'Shift') || !keyName) {
-      $('desktop-shortcut-status').textContent = 'Use Command, Control or Option together with a letter, number, Space, Return or function key.';
+      $('desktop-shortcut-status').textContent = 'Use Command, Control or Option together with a letter, number, Space, Return, arrow or function key.';
       return;
     }
     void updateShortcuts({ ...desktopSettings.shortcuts, [key]: [...modifiers, keyName].join('+') });
@@ -1787,8 +1769,9 @@ if (desktop) {
   }
   $('desktop-shortcut-reset').addEventListener('click', () => { if (desktopSettings) void updateShortcuts(desktopSettings.defaults); });
   desktop.onCommand(command => {
-    if (command.type === 'toggle') void toggleTimer(command.source);
-    else if (command.type === 'end') void endTimer(command.source);
+    if (command.type === 'toggle') void toggleTimer();
+    else if (command.type === 'end') void endTimer();
+    else if (command.type === 'skip') void skipTimer();
     else if (command.type === 'settings') showSettings();
     else if (command.type === 'export') void downloadBackup();
     else if (command.type === 'suspend') {

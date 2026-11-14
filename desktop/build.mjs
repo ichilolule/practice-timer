@@ -23,7 +23,7 @@ try {
   const assets = ['index.html', 'styles.css', 'app.js', 'timer-core.js', 'practice-data.js', 'backup-files.js', 'sound-engine.js',
     'manifest.json', 'favicon-32.png', 'apple-touch-icon.png', 'stopwatch-dock-icon-192.png', 'stopwatch-dock-icon-512.png', 'package.json'];
   for (const filename of assets) await cp(path.join(root, filename), path.join(source, filename));
-  for (const filename of ['main.cjs', 'preload.cjs', 'storage.cjs', 'server.cjs', 'native-sounds.cjs', 'trayTemplate.png', 'trayTemplate@2x.png']) {
+  for (const filename of ['main.cjs', 'preload.cjs', 'storage.cjs', 'server.cjs', 'native-sounds.cjs', 'trayTemplate.png', 'trayTemplate@2x.png', 'breakTrayTemplate.png', 'breakTrayTemplate@2x.png']) {
     await cp(path.join(root, 'desktop', filename), path.join(source, 'desktop', filename));
   }
   const iconset = path.join(work, 'Timer.iconset');

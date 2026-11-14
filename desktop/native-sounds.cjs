@@ -17,14 +17,12 @@ function createNativeSounds({ directory = SOUND_DIRECTORY, launch = spawn } = {}
   return {
     list: () => files.map(filename => ({ id: `mac:${filename}`, label: path.parse(filename).name })),
     stop,
-    play(id, volume, pitch) {
-      if (!allowed.has(id) || !Number.isFinite(volume) || volume < 0 || volume > 100 ||
-          !Number.isInteger(pitch) || pitch < -12 || pitch > 12) throw new Error('Invalid Mac sound.');
+    play(id, volume) {
+      if (!allowed.has(id) || !Number.isFinite(volume) || volume < 0 || volume > 100) throw new Error('Invalid Mac sound.');
       stop();
       if (volume === 0) return Promise.resolve();
       return new Promise((resolve, reject) => {
-        const child = launch('/usr/bin/afplay', ['-v', String(volume / 100), '-r', String(2 ** (pitch / 12)),
-          '-q', '1', allowed.get(id)], { stdio: 'ignore', shell: false });
+        const child = launch('/usr/bin/afplay', ['-v', String(volume / 100), allowed.get(id)], { stdio: 'ignore', shell: false });
         active = child;
         let timedOut = false;
         const timer = setTimeout(() => { timedOut = true; child.kill(); }, 15_000);

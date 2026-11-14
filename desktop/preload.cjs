@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('practiceDesktop', {
   finishQuit: ok => ipcRenderer.send('desktop:quit-result', ok),
   settings: () => ipcRenderer.invoke('desktop:settings'),
   sounds: () => ipcRenderer.invoke('desktop:sounds'),
-  playSound: (id, volume, pitch) => ipcRenderer.invoke('desktop:play-sound', id, volume, pitch),
+  playSound: (id, volume) => ipcRenderer.invoke('desktop:play-sound', id, volume),
   setShortcuts: value => ipcRenderer.invoke('desktop:shortcuts', value),
   recordShortcut: active => ipcRenderer.send('desktop:shortcut-recording', active),
   notify: (phase, minutes) => ipcRenderer.send('desktop:notify', phase, minutes),

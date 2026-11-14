@@ -22,21 +22,21 @@ test('only installed regular sound files are listed; playback uses an allowlist 
   } });
   t.after(() => native.stop());
   assert.deepEqual(native.list(), [{ id: 'mac:Bell.aiff', label: 'Bell' }, { id: 'mac:Water.wav', label: 'Water' }]);
-  for (const [id, volume, pitch] of [['mac:../Bell.aiff', 20, 0], ['mac:Missing.aiff', 20, 0],
-    ['mac:Bell.aiff', 101, 0], ['mac:Bell.aiff', NaN, 0], ['mac:Bell.aiff', 20, -13]]) {
-    assert.throws(() => native.play(id, volume, pitch), /Invalid Mac sound/);
+  for (const [id, volume] of [['mac:../Bell.aiff', 20], ['mac:Missing.aiff', 20],
+    ['mac:Bell.aiff', 101], ['mac:Bell.aiff', NaN]]) {
+    assert.throws(() => native.play(id, volume), /Invalid Mac sound/);
   }
-  await native.play('mac:Bell.aiff', 0, 0);
+  await native.play('mac:Bell.aiff', 0);
   assert.equal(launches.length, 0);
-  const first = native.play('mac:Bell.aiff', 20, 12);
+  const first = native.play('mac:Bell.aiff', 20);
   assert.equal(launches[0].command, '/usr/bin/afplay');
-  assert.deepEqual(launches[0].args, ['-v', '0.2', '-r', '2', '-q', '1', path.join(directory, 'Bell.aiff')]);
+  assert.deepEqual(launches[0].args, ['-v', '0.2', path.join(directory, 'Bell.aiff')]);
   assert.equal(launches[0].options.shell, false);
-  const second = native.play('mac:Water.wav', 10, 0);
+  const second = native.play('mac:Water.wav', 10);
   await first;
   launches[1].child.emit('exit', 0, null);
   await second;
-  const failed = native.play('mac:Bell.aiff', 20, 0);
+  const failed = native.play('mac:Bell.aiff', 20);
   launches[2].child.emit('exit', 1, null);
   await assert.rejects(failed, /Could not play Mac sound/);
 });

@@ -8,12 +8,12 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
   <link rel="manifest" href="./manifest.json">
-  <link rel="stylesheet" href="styles.css?rev=5988d65346">
+  <link rel="stylesheet" href="styles.css?rev=5c125b5ce4">
   <script defer src="timer-core.js?rev=6f27a71c5e"></script>
   <script defer src="practice-data.js?rev=62c8cf32cb"></script>
   <script defer src="backup-files.js?rev=7871524515"></script>
-  <script defer src="sound-engine.js?rev=f4c1452350"></script>
-  <script defer src="app.js?rev=9d3554fe22"></script>
+  <script defer src="sound-engine.js?rev=8cf42ddb58"></script>
+  <script defer src="app.js?rev=56d283500c"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -188,6 +188,7 @@
             <h2 id="desktop-settings-title">Shortcut keys</h2>
             <div class="desktop-shortcuts">
               <label>Start / pause / resume<input id="desktop-shortcut-toggle" type="text" readonly></label>
+              <label>Next phase (skip)<input id="desktop-shortcut-skip" type="text" readonly></label>
               <label>End session<input id="desktop-shortcut-end" type="text" readonly></label>
             </div>
             <button id="desktop-shortcut-reset" type="button">Reset shortcuts</button>
@@ -207,49 +208,33 @@
             <h2><svg class="icon" aria-hidden="true"><use href="#icon-sound"/></svg>Sound</h2>
             <div class="sound-settings">
               <div class="sound-field">
-                <div class="sound-field-heading"><label for="sound-volume">Alerts</label><output id="sound-volume-value" for="sound-volume">20%</output></div>
-                <input id="sound-volume" type="range" min="0" max="100" step="1" value="20">
-              </div>
-              <div class="sound-field">
-                <div class="sound-field-heading"><label for="sound-pitch">Pitch</label><output id="sound-pitch-value" for="sound-pitch">Default</output></div>
-                <input id="sound-pitch" type="range" min="-12" max="12" step="1" value="0">
+                <div class="sound-field-heading"><label for="sound-volume">Volume</label><output id="sound-volume-value" for="sound-volume">10%</output></div>
+                <input id="sound-volume" type="range" min="0" max="100" step="1" value="10">
               </div>
               <div class="sound-choice">
-                <label for="sound-work">Work starts</label>
-                <select id="sound-work" aria-label="Work starts sound"></select>
-                <button id="preview-work" type="button" class="icon-button" aria-label="Preview work starts sound" title="Preview work starts sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+                <label for="sound-start">Start</label>
+                <select id="sound-start" aria-label="Start sound"></select>
+                <button id="preview-start" type="button" class="icon-button" aria-label="Preview start sound" title="Preview start sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
               <div class="sound-choice">
-                <label for="sound-rest">Break starts</label>
-                <select id="sound-rest" aria-label="Break starts sound"></select>
-                <button id="preview-rest" type="button" class="icon-button" aria-label="Preview break starts sound" title="Preview break starts sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+                <label for="sound-pause">Pause</label>
+                <select id="sound-pause" aria-label="Pause sound"></select>
+                <button id="preview-pause" type="button" class="icon-button" aria-label="Preview pause sound" title="Preview pause sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
-              <div id="shortcut-sounds" class="shortcut-sounds" hidden>
-                <h3>Shortcut sounds</h3>
-                <div class="sound-field">
-                  <div class="sound-field-heading"><label for="sound-operation-volume">Volume</label><output id="sound-operation-volume-value" for="sound-operation-volume">10%</output></div>
-                  <input id="sound-operation-volume" type="range" min="0" max="100" step="1" value="10">
-                </div>
-                <div class="sound-choice">
-                  <label for="sound-start">Start</label>
-                  <select id="sound-start" aria-label="Start sound"></select>
-                  <button id="preview-start" type="button" class="icon-button" aria-label="Preview start sound" title="Preview start sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
-                </div>
-                <div class="sound-choice">
-                  <label for="sound-pause">Pause</label>
-                  <select id="sound-pause" aria-label="Pause sound"></select>
-                  <button id="preview-pause" type="button" class="icon-button" aria-label="Preview pause sound" title="Preview pause sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
-                </div>
-                <div class="sound-choice">
-                  <label for="sound-resume">Resume</label>
-                  <select id="sound-resume" aria-label="Resume sound"></select>
-                  <button id="preview-resume" type="button" class="icon-button" aria-label="Preview resume sound" title="Preview resume sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
-                </div>
-                <div class="sound-choice">
-                  <label for="sound-end">End session</label>
-                  <select id="sound-end" aria-label="End session sound"></select>
-                  <button id="preview-end" type="button" class="icon-button" aria-label="Preview end session sound" title="Preview end session sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
-                </div>
+              <div class="sound-choice">
+                <label for="sound-resume">Resume</label>
+                <select id="sound-resume" aria-label="Resume sound"></select>
+                <button id="preview-resume" type="button" class="icon-button" aria-label="Preview resume sound" title="Preview resume sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+              </div>
+              <div class="sound-choice">
+                <label for="sound-skip">Next phase (skip)</label>
+                <select id="sound-skip" aria-label="Next phase (skip) sound"></select>
+                <button id="preview-skip" type="button" class="icon-button" aria-label="Preview next phase (skip) sound" title="Preview next phase (skip) sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+              </div>
+              <div class="sound-choice">
+                <label for="sound-end">End session</label>
+                <select id="sound-end" aria-label="End session sound"></select>
+                <button id="preview-end" type="button" class="icon-button" aria-label="Preview end session sound" title="Preview end session sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
             </div>
             <p id="sound-availability" class="subtle" role="status"></p>
