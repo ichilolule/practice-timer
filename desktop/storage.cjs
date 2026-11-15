@@ -46,7 +46,7 @@ function readText(filename, missing = '') {
 function checkState(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > MAX_BYTES) throw new Error('Data must be 5 MB or smaller.');
   const value = JSON.parse(text);
-  if (value?.format !== 'practice-timer-beta' || value.version !== 1) throw new Error('Invalid Practice Timer data.');
+  if (value?.format !== 'practice-timer-beta' || value.version !== 1) throw new Error('Invalid Latte Loop data.');
   return text;
 }
 

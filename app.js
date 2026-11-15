@@ -25,6 +25,7 @@ let itemDrag = null;
 let stepDrag = null;
 let taskPickerScrollTop = 0;
 let taskEditorSource = null;
+let taskEditorRecordGroupId = null;
 let taskUndo = null;
 let periodKind = 'day';
 let periodAnchor = Date.now();
@@ -180,7 +181,7 @@ function renderTaskChoice(rebuildPicker = true) {
   if (!rebuildPicker && !$('active-task-panel').hidden) taskPickerScrollTop = $('task-picker-list').scrollTop;
   if (rebuildPicker) renderTaskPicker();
   else for (const row of $('task-picker-list').children) {
-    const choose = row.querySelector('button');
+    const choose = row.querySelector('.task-pick');
     if (choose) {
       const selected = row.getAttribute('data-task-id') === selectedTaskId;
       choose.setAttribute('aria-pressed', String(selected));
@@ -226,7 +227,7 @@ function renderTaskPicker() {
     item.className = 'task-pick-row';
     item.setAttribute('data-task-id', task.id);
     choose.title = task.title;
-    item.append(choose, itemDragHandle(task, item, 'task-picker-list'));
+    item.append(itemDragHandle(task, item, 'task-picker-list'), choose);
     list.append(item);
   }
   list.scrollTop = scrollTop;
@@ -416,6 +417,7 @@ function resetTaskForm() {
   if ($('task-dialog').open) $('task-dialog').close();
   editingTaskId = null;
   taskEditorSource = null;
+  taskEditorRecordGroupId = null;
   $('task-title').value = '';
   $('task-first-step').value = '';
   $('task-group').value = '';
@@ -440,10 +442,11 @@ function renderTaskChildren(selected = '') {
   select.disabled = !group || !group.children.length;
 }
 
-function openTaskEditor(task = null, source = null) {
+function openTaskEditor(task = null, source = null, recordGroupId = null) {
   resetTaskForm();
   editingTaskId = task?.id || null;
   taskEditorSource = source;
+  taskEditorRecordGroupId = recordGroupId;
   $('task-title').value = task?.title || (source ? $(source).value.trim() : '');
   $('task-first-step').value = task?.firstStep || '';
   const { groupId, childId } = taskTargetParts(task?.targetId);
@@ -475,6 +478,13 @@ function saveTask() {
   else {
     task = { id: newId(), title, firstStep, targetId, completedAt: null };
     tasks.unshift(task);
+  }
+  if (taskEditorRecordGroupId) {
+    for (const record of sessions) {
+      if (record.recordGroupId === taskEditorRecordGroupId) Object.assign(record, {
+        taskId: task.id, taskTitle: task.title, targetId: task.targetId,
+      });
+    }
   }
   if (taskEditorSource) $(taskEditorSource).value = '';
   persist();
@@ -552,11 +562,11 @@ function taskRow(task, completed) {
   const title = rowButton(task.title, `Edit ${task.title}`, () => openTaskEditor(task));
   title.id = `task-title-${task.id}`;
   title.className = 'task-title-button';
-  item.append(checkLabel, title);
   if (!completed) {
     item.setAttribute('data-task-id', task.id);
     item.append(itemDragHandle(task, item, 'task-list'));
   }
+  item.append(checkLabel, title);
   return item;
 }
 
@@ -1233,7 +1243,7 @@ function validateBackup(raw) {
   if (!raw || raw.format !== BACKUP_FORMAT || raw.version !== 1 ||
       !Array.isArray(raw.steps) || !Array.isArray(raw.tasks) ||
       !Array.isArray(raw.groups) || !Array.isArray(raw.sessions)) {
-    throw new Error('This is not a supported Practice timer backup.');
+    throw new Error('This is not a supported Latte Loop backup.');
   }
   const restoredSteps = raw.steps.length ? normalizeSteps(raw.steps, { requireBoth: false }) : [];
   const ids = new Set();
@@ -1575,6 +1585,7 @@ $('task-form').addEventListener('submit', (event) => {
   saveTask();
 });
 $('task-cancel').addEventListener('click', resetTaskForm);
+$('task-dialog').addEventListener('cancel', (event) => { event.preventDefault(); resetTaskForm(); });
 $('task-delete').addEventListener('click', () => {
   const task = tasks.find(item => item.id === editingTaskId);
   if (!task || (run && selectedTaskId === task.id)) return;
@@ -1706,7 +1717,8 @@ function endTimer() {
   const saved = persist();
   renderTimer();
   renderTaskChoice();
-  $('main-action').focus();
+  if (!task) openTaskEditor(null, null, recordGroupId);
+  else $('main-action').focus();
   if (saved) return queueSound('end');
 }
 $('end').addEventListener('click', endTimer);
@@ -1780,7 +1792,9 @@ addEventListener('beforeunload', () => {
 
 load();
 if (desktop) {
-  document.title = 'Practice Timer';
+  document.title = 'Latte Loop';
+  document.documentElement.classList.toggle('is-desktop', true);
+  $('desktop-titlebar').hidden = false;
   macSoundsReady = desktop.sounds().then(value => { macSounds = value; })
     .catch(() => { macSoundsFailed = true; })
     .finally(() => renderSoundSettings());

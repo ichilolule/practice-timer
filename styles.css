@@ -2,27 +2,28 @@
 :root {
   --color-page: #fbf5ef;
   --color-surface: #fbf5ef;
-  --color-sidebar: #d0e0ee;
+  --color-blue: #CEE3EC;
+  --color-sidebar: var(--color-blue);
   --color-text: #44271c;
   --color-muted: #786457;
   --color-primary: #572708;
   --color-on-primary: #fff8f1;
-  --color-accent: #79a7c5;
-  --color-rest: var(--color-accent);
+  --color-accent: var(--color-blue);
+  --color-rest: var(--color-primary);
   --color-overtime: #975019;
-  --color-overtime-ring: #b87534;
-  --color-selection: #cbdfee;
+  --color-selection: var(--color-blue);
   --color-hover: #e7e2dc;
   --color-border: #cbbcaf;
   --color-line: #ded3c9;
   --color-track: #ecdfd3;
   --color-ring-track: #ebd2bf;
-  --color-focus: #477a9b;
+  --color-focus: var(--color-primary);
   --color-danger: #a13729;
   --shadow-dialog: #44271c24;
   --shadow-toast: #44271c20;
   --overlay: #44271c66;
   --font-ui: "Avenir Next", Avenir, "Hiragino Sans", "Yu Gothic", sans-serif;
+  --titlebar-height: 0px;
   --app-max-width: 62.5rem;
   --primary-nav-height: calc(3.5rem + env(safe-area-inset-bottom));
   --page-padding: clamp(1rem, 3.2vw, 2rem);
@@ -39,7 +40,9 @@
   line-height: 1.5;
 }
 * { box-sizing: border-box; }
-body { margin: 0; }
+body { margin: 0; padding-top: var(--titlebar-height); }
+:root.is-desktop { --titlebar-height: 2.25rem; }
+#desktop-titlebar { position: fixed; inset: 0 0 auto; z-index: 30; display: grid; place-items: center; height: var(--titlebar-height); padding-inline: 5rem; background: var(--color-ring-track); color: var(--color-text); font-size: .8125rem; font-weight: 600; user-select: none; app-region: drag; }
 .desktop-banner { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .25rem 1rem; margin-bottom: .75rem; color: var(--color-muted); font-size: .875rem; }
 .desktop-banner[hidden] { display: none; }
 .desktop-shortcuts { display: grid; gap: .75rem; margin-bottom: .75rem; }
@@ -234,7 +237,7 @@ dialog h2 { margin-top: 0; }
 [hidden] { display: none !important; }
 
 /* Timer: cream dial beside a pale blue task panel. */
-.app { width: min(100%, var(--app-max-width)); min-height: 100vh; min-height: 100dvh; margin: 0 auto; padding: 0 0 var(--primary-nav-height); background: var(--color-surface); }
+.app { width: min(100%, var(--app-max-width)); min-height: calc(100vh - var(--titlebar-height)); min-height: calc(100dvh - var(--titlebar-height)); margin: 0 auto; padding: 0 0 var(--primary-nav-height); background: var(--color-surface); }
 .app > section:not(#timer-view) { padding: 1rem var(--page-padding); }
 .app > #tasks-view { padding-bottom: calc(var(--task-entry-height) + 1.5rem); }
 .app > #themes-view { padding-bottom: calc(var(--theme-entry-height) + 1.5rem); }
@@ -243,10 +246,10 @@ dialog h2 { margin-top: 0; }
 #primary-nav button:hover { background: var(--color-hover); }
 #primary-nav .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.6; }
 #primary-nav button[aria-current="page"] { background: var(--color-selection); }
-.timer-layout { display: grid; grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-height: calc(100vh - var(--primary-nav-height)); min-height: calc(100dvh - var(--primary-nav-height)); }
+.timer-layout { display: grid; grid-template-areas: "tasks timer"; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-height: calc(100vh - var(--titlebar-height) - var(--primary-nav-height)); min-height: calc(100dvh - var(--titlebar-height) - var(--primary-nav-height)); }
 .timer-layout > div { min-width: 0; }
 .timer-layout[data-running="true"] { grid-template-areas: "timer"; grid-template-columns: minmax(0, 1fr); }
-.timer-face { grid-area: timer; display: flex; flex-direction: column; align-items: center; justify-content: safe center; height: calc(100dvh - var(--primary-nav-height)); overflow: auto; padding: clamp(.5rem, 2dvh, 2rem) clamp(.75rem, 2vw, 1.5rem); text-align: center; }
+.timer-face { grid-area: timer; display: flex; flex-direction: column; align-items: center; justify-content: safe center; height: calc(100dvh - var(--titlebar-height) - var(--primary-nav-height)); overflow: auto; padding: clamp(.5rem, 2dvh, 2rem) clamp(.75rem, 2vw, 1.5rem); text-align: center; }
 .active-task-summary, .timer-controls, .timer-logged, #status { flex-shrink: 0; }
 .active-task-summary { width: 100%; margin: 0 0 clamp(.5rem, 1.6dvh, 1.5rem); }
 .active-task-summary:has(#active-task-name[hidden]) { display: none; }
@@ -268,7 +271,8 @@ dialog h2 { margin-top: 0; }
 .is-rest #clock { color: var(--color-rest); }
 .is-overtime #clock { color: var(--color-overtime); font-size: 21cqi; }
 .is-overtime #clock.has-hours { font-size: 15cqi; }
-.is-overtime #timer-ring-remaining { stroke: var(--color-overtime-ring); stroke-dasharray: 2 2; }
+.is-overtime .timer-ring-track { stroke: none; }
+.is-overtime #timer-ring-remaining { stroke: var(--color-ring-track); stroke-dasharray: 2 2; }
 #overtime-label { color: var(--color-overtime); font-size: 4cqi; font-weight: 650; letter-spacing: .04em; }
 .timer-controls { display: grid; grid-template-columns: 3rem var(--timer-action-size) 3rem; align-items: center; justify-content: center; gap: .75rem; margin-top: clamp(.5rem, 2dvh, 1.5rem); }
 #main-action { grid-column: 2; width: var(--timer-action-size); height: var(--timer-action-size); padding: 0; border: 0; border-radius: 50%; background: var(--color-primary); color: var(--color-on-primary); }
@@ -280,7 +284,7 @@ dialog h2 { margin-top: 0; }
 .timer-logged .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.6; }
 #status { max-width: 42ch; margin: 0.75rem 0 0; }
 #active-task-panel { grid-area: tasks; min-height: 0; padding: clamp(1rem, 3dvh, 2rem) clamp(.5rem, 1.6vw, 1rem) 1rem; border-right: 0.0625rem solid var(--color-border); background: var(--color-sidebar); }
-#active-task-panel { display: flex; flex-direction: column; gap: 0; height: calc(100dvh - var(--primary-nav-height)); min-height: 18rem; position: sticky; top: 0; }
+#active-task-panel { display: flex; flex-direction: column; gap: 0; height: calc(100dvh - var(--titlebar-height) - var(--primary-nav-height)); min-height: 18rem; position: sticky; top: var(--titlebar-height); }
 #task-picker-list { flex: 0 1 auto; min-height: 3.5rem; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0; scrollbar-gutter: stable; }
 #task-picker-list li { padding: 0; border-bottom: 0.0625rem solid var(--color-line); }
 #task-picker-list li:has([aria-pressed="true"]) { border-color: transparent; border-radius: 1rem; background: var(--color-surface); }
@@ -406,7 +410,7 @@ dialog h2 { margin-top: 0; }
   .timer-layout { grid-template-areas: "timer" "tasks"; grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .timer-face { height: auto; overflow: visible; padding: 1rem; }
   .timer-dial-space { flex: none; height: var(--timer-diameter); }
-  .timer-layout[data-running="true"] .timer-face { height: calc(100dvh - var(--primary-nav-height)); overflow: auto; }
+  .timer-layout[data-running="true"] .timer-face { height: calc(100dvh - var(--titlebar-height) - var(--primary-nav-height)); overflow: auto; }
   .timer-layout[data-running="true"] .timer-dial-space { flex: 0 1 var(--timer-diameter); }
   #active-task-panel { position: static; height: auto; min-height: 0; padding: 1rem; border-right: 0; border-top: .0625rem solid var(--color-border); }
   #task-picker-list { max-height: 16rem; }

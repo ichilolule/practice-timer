@@ -39,8 +39,8 @@ test('desktop: native menus, hidden timing, shortcuts, backups, suspend, restart
   let page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.waitForFunction(() => document.title === 'Practice Timer');
-  assert.equal(await page.title(), 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
+  assert.equal(await page.title(), 'Latte Loop');
   assert.equal(await page.locator('#desktop-banner').isVisible(), false);
   assert.equal(await page.locator('#desktop-save-status').textContent(), '');
   assert.match(page.url(), /^http:\/\/127\.0\.0\.1:/);
@@ -151,7 +151,7 @@ test('desktop: native menus, hidden timing, shortcuts, backups, suspend, restart
   assert.equal(onDisk.run.status, 'paused');
   assert.equal(onDisk.tasks[0].title, 'Desktop test task');
   app = await launch(directory); page = await app.firstWindow();
-  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
   assert.equal(await page.locator('#main-action').getAttribute('aria-label'), 'Resume');
   assert.equal((await state(page)).run.remainingMs, beforeQuit);
   assert.deepEqual((await page.evaluate(() => practiceDesktop.settings())).shortcuts, shortcuts);
@@ -212,7 +212,7 @@ test('hidden phase changes and quitting a running timer preserve elapsed work', 
   const app = await launch(directory);
   t.after(() => app.close().catch(() => {}));
   const page = await app.firstWindow();
-  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
   await command(app, 'toggle');
   await page.waitForFunction(() => document.getElementById('main-action').getAttribute('aria-label') === 'Pause');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
@@ -234,7 +234,7 @@ test('desktop security: imported markup, denied browser permissions, foreign win
   const app = await launch(directory);
   t.after(() => app.close().catch(() => {}));
   const page = await app.firstWindow();
-  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
   assert.ok((await page.locator('#task-picker-list').textContent()).includes(payload));
   assert.equal(await page.locator('#task-picker-list img').count(), 0);
   assert.equal(await page.evaluate(() => window.__injected), undefined);
@@ -288,7 +288,7 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   let page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
   await command(app, 'settings');
   await page.waitForSelector('#sound-start:visible');
   await page.waitForFunction(() => document.querySelector('#sound-start optgroup[label="Mac sounds"]'));
@@ -397,6 +397,7 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   assert.equal((await state(page)).run.status, 'running');
   await iconIs('work');
   clicked.end = await action(() => page.locator('#end').click(), 2);
+  await page.locator('#task-cancel').click();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
   assert.deepEqual(await action(() => press(shortcuts.toggle), 3), clicked.start);
   assert.deepEqual(await action(() => press(shortcuts.toggle), 1), clicked.pause);
@@ -413,6 +414,7 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   assert.deepEqual(await action(() => press(shortcuts.end), 2), clicked.end);
   await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run === null);
   await iconIs('work');
+  await page.locator('#task-cancel').click();
   await page.evaluate(() => { played = []; });
   await press(shortcuts.skip);
   await page.waitForTimeout(100);
@@ -435,7 +437,7 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await quit(app); app = null;
   app = await launch(directory); page = await app.firstWindow();
-  await page.waitForFunction(() => document.title === 'Practice Timer');
+  await page.waitForFunction(() => document.title === 'Latte Loop');
   await command(app, 'settings');
   await page.waitForSelector('#sound-start:visible');
   assert.deepEqual((await state(page)).sound, savedSound);
@@ -645,6 +647,119 @@ test('overtime UI, destination sounds, native skip shortcut, settings and restar
   await command(app, 'end');
   await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run === null);
   assert.ok((await state(page)).totalWorkMs >= work);
+  assert.deepEqual(errors, []);
+  await quit(app); app = null;
+});
+
+test('Latte Loop title bar, palette, left drag handles and end-session task registration', { timeout: 60_000 }, async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'latte-loop-ui-'));
+  let app, appProcess;
+  t.after(async () => {
+    if (appProcess && appProcess.exitCode == null) appProcess.kill('SIGKILL');
+    await rm(directory, { recursive: true, force: true });
+  });
+  await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify({ ...fixture,
+    groups: [{ id: 'art', title: 'Drawing', children: [{ id: 'hands', title: 'Hands' }] }],
+    tasks: [{ id: 'existing', title: 'Existing task', firstStep: '', targetId: null, completedAt: null }],
+  }));
+  app = await launch(directory); appProcess = app.process();
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.waitForSelector('#desktop-titlebar:visible');
+  assert.equal(await page.title(), 'Latte Loop');
+  assert.equal(await app.evaluate(({ app }) => app.getName()), 'Latte Loop');
+  assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), directory);
+  assert.deepEqual(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getWindowButtonPosition()), { x: 12, y: 10 });
+  const titlebar = await page.locator('#desktop-titlebar').evaluate(element => ({
+    color: getComputedStyle(element).backgroundColor, height: element.getBoundingClientRect().height,
+    drag: getComputedStyle(element).getPropertyValue('app-region'),
+  }));
+  assert.equal(titlebar.color, 'rgb(235, 210, 191)');
+  assert.equal(titlebar.height, 36);
+  assert.equal(titlebar.drag, 'drag');
+  assert.equal(await page.locator('#active-task-panel').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(206, 227, 236)');
+  assert.equal(await page.locator('#nav-timer').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(206, 227, 236)');
+  assert.equal(await page.locator('#timer-ring-remaining').evaluate(element => getComputedStyle(element).stroke), 'rgb(206, 227, 236)');
+  async function checkHandle(selector) {
+    const row = page.locator(selector).first();
+    assert.equal(await row.locator(':scope > :first-child').getAttribute('class'), 'task-drag-handle');
+    const handle = await row.locator('.task-drag-handle').boundingBox();
+    const bounds = await row.boundingBox();
+    assert.ok(handle.x <= bounds.x + 2);
+  }
+  await checkHandle('#task-picker-list .task-pick-row');
+  await page.locator('#nav-tasks').click();
+  await checkHandle('#task-list .task-row');
+  await page.locator('#nav-themes').click();
+  await checkHandle('#group-list .theme-row');
+  await page.locator('#settings-toggle').click();
+  const routine = page.locator('#step-list .step-row').first();
+  assert.equal(await routine.locator(':scope > :first-child').getAttribute('class'), 'step-drag-handle');
+  await page.locator('#nav-timer').click();
+  await page.screenshot({ path: '/private/tmp/latte-loop-desktop.png' });
+  await page.locator('#main-action').click();
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.sessionWorkMs > 0);
+  await page.locator('#end').click();
+  await page.waitForSelector('#task-dialog:visible');
+  const ended = await state(page);
+  assert.equal(ended.run, null);
+  const work = ended.totalWorkMs;
+  assert.ok(work > 0);
+  await page.locator('#task-title').fill('Hand studies');
+  await page.locator('#task-first-step').fill('Observe the knuckles');
+  await page.selectOption('#task-group', 'art');
+  await page.selectOption('#task-child', 'hands');
+  await page.screenshot({ path: '/private/tmp/latte-loop-add-task.png' });
+  await page.locator('#task-save').click();
+  const assigned = await state(page);
+  assert.equal(assigned.totalWorkMs, work);
+  assert.equal(assigned.sessions[0].taskTitle, 'Hand studies');
+  assert.equal(assigned.sessions[0].taskId, assigned.tasks[0].id);
+  assert.equal(assigned.sessions[0].targetId, 'hands');
+  assert.equal(assigned.tasks[0].firstStep, 'Observe the knuckles');
+  assert.equal(await page.locator('#task-dialog').isVisible(), false);
+  // Ending from a hidden window brings the registration prompt into view.
+  await command(app, 'toggle');
+  await app.evaluate(({ BrowserWindow, dialog }) => {
+    BrowserWindow.getAllWindows()[0].hide();
+    dialog.showMessageBox = async () => ({ response: 0 });
+  });
+  // Capture the tray end action with the same menu used by the other native tests.
+  await app.evaluate(({ Tray }) => {
+    const original = Tray.prototype.setContextMenu;
+    Tray.prototype.setContextMenu = function (menu) { globalThis.latteMenu = menu; return original.call(this, menu); };
+  });
+  await command(app, 'toggle');
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.status === 'paused');
+  await app.evaluate(() => latteMenu.items.find(item => item.label === 'End session…').click());
+  await page.waitForSelector('#task-dialog:visible');
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true);
+  await page.locator('#task-dialog').press('Escape');
+  assert.equal(await page.locator('#task-dialog').isVisible(), false);
+  await command(app, 'settings');
+  await page.locator('#auto-start-rest').uncheck();
+  await page.locator('#step-list input').first().fill('0.1');
+  await page.locator('#nav-timer').click();
+  await page.locator('#main-action').click();
+  await page.waitForSelector('#timer-dial.is-overtime');
+  const overtime = await page.evaluate(() => ({
+    track: getComputedStyle(document.querySelector('.timer-ring-track')).stroke,
+    stroke: getComputedStyle(document.getElementById('timer-ring-remaining')).stroke,
+    dash: getComputedStyle(document.getElementById('timer-ring-remaining')).strokeDasharray,
+  }));
+  assert.equal(overtime.track, 'none');
+  assert.equal(overtime.stroke, titlebar.color);
+  assert.equal(overtime.dash, '2px, 2px');
+  await page.screenshot({ path: '/private/tmp/latte-loop-overtime.png' });
+  for (const width of [360, 430, 720]) {
+    await app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 740), width);
+    await page.waitForFunction(width => innerWidth === width, width);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const end = await page.locator('#end').boundingBox();
+    const nav = await page.locator('#primary-nav').boundingBox();
+    assert.ok(end.y + end.height <= nav.y);
+  }
   assert.deepEqual(errors, []);
   await quit(app); app = null;
 });

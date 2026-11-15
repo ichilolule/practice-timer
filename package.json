@@ -1,8 +1,8 @@
 {
   "name": "practice-timer-desktop",
-  "productName": "Practice Timer",
-  "version": "0.1.7",
-  "description": "Personal Practice Timer desktop app",
+  "productName": "Latte Loop",
+  "version": "0.1.8",
+  "description": "Personal Latte Loop desktop app",
   "private": true,
   "main": "desktop/main.cjs",
   "scripts": {

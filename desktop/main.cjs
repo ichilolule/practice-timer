@@ -8,7 +8,9 @@ const { createNativeSounds } = require('./native-sounds.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DEFAULT_SHORTCUTS = { toggle: 'Command+Shift+Space', skip: 'Command+Shift+Right', end: 'Command+Shift+Enter' };
-app.setName('Practice Timer');
+app.setName('Latte Loop');
+// Keep the existing records, shortcuts and backup destinations across the rename.
+app.setPath('userData', path.join(app.getPath('appData'), 'Practice Timer'));
 // Tests use a separate directory and never import or overwrite the user's data.
 if (process.env.PRACTICE_TIMER_DATA_DIR) app.setPath('userData', path.resolve(process.env.PRACTICE_TIMER_DATA_DIR));
 
@@ -26,7 +28,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showWindow());
   app.whenReady().then(start).catch(error => {
-    dialog.showErrorBox('Practice Timer could not start', error.message); allowQuit = true; app.quit();
+    dialog.showErrorBox('Latte Loop could not start', error.message); allowQuit = true; app.quit();
   });
 }
 
@@ -47,7 +49,7 @@ async function endSession() {
       type: 'question', message: 'End this session?', detail: 'Your work time will be recorded.',
       buttons: ['End session', 'Cancel'], defaultId: 1, cancelId: 1,
     });
-    if (response === 0) send('end');
+    if (response === 0) { showWindow(); send('end'); }
   } finally { endDialogOpen = false; }
 }
 function toggle() {
@@ -103,7 +105,7 @@ function refreshTray() {
   const phase = status.phase === 'rest' ? 'Break' : 'Work';
   const prefix = status.status === 'paused' ? 'Ⅱ ' : status.status === 'running' ? '' : '○ ';
   tray.setTitle(`${prefix}${status.time}`, { fontType: 'monospacedDigit' });
-  tray.setToolTip(`Practice Timer — ${phase}${status.task ? ` · ${status.task}` : ''}`);
+  tray.setToolTip(`Latte Loop — ${phase}${status.task ? ` · ${status.task}` : ''}`);
   const description = `${phase} · ${status.time}${status.status === 'paused' ? ' · paused' : ''}`;
   const signature = JSON.stringify([status.status, status.phase, status.task, ready, quitPending]);
   if (trayMenu && signature === traySignature) {
@@ -112,7 +114,7 @@ function refreshTray() {
   }
   traySignature = signature;
   trayMenu = Menu.buildFromTemplate([
-    { label: 'Practice Timer', enabled: false },
+    { label: 'Latte Loop', enabled: false },
     { id: 'phase-status', label: description, enabled: false },
     ...(status.task ? [{ label: status.task, enabled: false }] : []),
     { type: 'separator' },
@@ -125,7 +127,7 @@ function refreshTray() {
     { label: 'Settings…', click: () => showWindow(true) },
     { label: 'Export JSON…', enabled: ready, click: () => send('export') },
     { type: 'separator' },
-    { label: 'Quit Practice Timer', click: () => app.quit() },
+    { label: 'Quit Latte Loop', click: () => app.quit() },
   ]);
   tray.setContextMenu(trayMenu);
 }
@@ -157,7 +159,8 @@ async function start() {
   }
   server = await serve(ROOT);
   window = new BrowserWindow({
-    title: 'Practice Timer', width: 1100, height: 820, minWidth: 360, minHeight: 500,
+    title: 'Latte Loop', width: 1100, height: 820, minWidth: 360, minHeight: 500,
+    titleBarStyle: 'hidden', trafficLightPosition: { x: 12, y: 10 },
     show: false, backgroundColor: '#fbf5ef', icon: path.join(ROOT, 'stopwatch-dock-icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true, backgroundThrottling: false, spellcheck: false },
@@ -171,11 +174,11 @@ async function start() {
   tray = new Tray(trayIcons.work);
   refreshTray();
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Practice Timer', submenu: [
-      { label: 'About Practice Timer', role: 'about' }, { type: 'separator' },
+    { label: 'Latte Loop', submenu: [
+      { label: 'About Latte Loop', role: 'about' }, { type: 'separator' },
       { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => showWindow(true) },
       { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
-      { type: 'separator' }, { label: 'Quit Practice Timer', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
+      { type: 'separator' }, { label: 'Quit Latte Loop', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
     ] },
     { role: 'editMenu' },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' },
@@ -190,7 +193,7 @@ async function start() {
   window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   window.webContents.on('render-process-gone', () => {
     ready = false; status = { ...status, status: 'paused' }; refreshTray();
-    dialog.showErrorBox('Practice Timer stopped', 'Your last saved data was kept. Quit and reopen the app to restore it paused.');
+    dialog.showErrorBox('Latte Loop stopped', 'Your last saved data was kept. Quit and reopen the app to restore it paused.');
   });
   window.once('ready-to-show', () => showWindow());
   ipcMain.on('desktop:load', event => {
@@ -247,13 +250,13 @@ async function start() {
   handle('desktop:export', async value => {
     checkState(value);
     const { canceled, filePath } = await dialog.showSaveDialog(window, { defaultPath: 'practice-timer.json',
-      filters: [{ name: 'Practice Timer JSON', extensions: ['json'] }] });
+      filters: [{ name: 'Latte Loop JSON', extensions: ['json'] }] });
     if (canceled || !filePath) return false;
     atomicWrite(filePath, value); return true;
   });
   handle('desktop:backup-pick', async () => {
     const { canceled, filePath } = await dialog.showSaveDialog(window, { defaultPath: 'practice-timer.json',
-      filters: [{ name: 'Practice Timer JSON', extensions: ['json'] }] });
+      filters: [{ name: 'Latte Loop JSON', extensions: ['json'] }] });
     if (canceled || !filePath) return null;
     const fileId = [...allowedFiles].find(([, filename]) => filename === filePath)?.[0] || randomUUID();
     allowedFiles.set(fileId, filePath);
@@ -288,7 +291,7 @@ app.on('before-quit', event => {
   quitPending = true; refreshTray(); send('quit');
   quitTimeout = setTimeout(() => {
     quitPending = false; showWindow(); refreshTray();
-    dialog.showErrorBox('Practice Timer is not responding', 'The app was kept open so that unsaved work is not discarded.');
+    dialog.showErrorBox('Latte Loop is not responding', 'The app was kept open so that unsaved work is not discarded.');
   }, 10_000);
 });
 app.on('will-quit', () => { globalShortcut.unregisterAll(); nativeSounds?.stop(); tray?.destroy(); server?.close(); });

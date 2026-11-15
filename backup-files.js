@@ -151,7 +151,7 @@ function mount({ snapshot, content, canWrite, download }) {
       let same = false;
       try { same = JSON.stringify(JSON.parse(disk)) === JSON.stringify(value); } catch {}
       if (same) { target.baseline = diskHash; target.verified = JSON.stringify(value); target.issue = null; return; }
-      if (diskHash !== target.baseline && (automatic || !confirm(`The JSON for “${target.label}” changed elsewhere. Overwrite it with the current Practice timer data?`))) {
+      if (diskHash !== target.baseline && (automatic || !confirm(`The JSON for “${target.label}” changed elsewhere. Overwrite it with the current Latte Loop data?`))) {
         target.issue = 'conflict'; return;
       }
       const writable = await target.handle.createWritable();
@@ -199,7 +199,7 @@ function mount({ snapshot, content, canWrite, download }) {
       if (desktop && !picked) return;
       const handle = desktop ? desktopHandle(picked) : await root.showSaveFilePicker({
         id: 'practice-timer-json', suggestedName: FILE_NAME,
-        types: [{ description: 'Practice timer JSON', accept: { 'application/json': ['.json'] } }],
+        types: [{ description: 'Latte Loop JSON', accept: { 'application/json': ['.json'] } }],
       });
       if (handle.name !== FILE_NAME) { message(`Use the filename ${FILE_NAME}.`); return; }
       for (const target of targets) {

@@ -1,12 +1,12 @@
 {
   "id": "./",
-  "name": "Practice timer",
-  "short_name": "Timer",
+  "name": "Latte Loop",
+  "short_name": "Latte Loop",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fbf5ef",
-  "theme_color": "#fbf5ef",
+  "theme_color": "#ebd2bf",
   "lang": "en",
   "icons": [
     { "src": "./stopwatch-dock-icon-192.png", "sizes": "192x192", "type": "image/png" },

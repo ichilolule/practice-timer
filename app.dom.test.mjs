@@ -40,7 +40,7 @@ class Element {
   get lastElementChild() { return this.children.at(-1); }
   querySelector(tag) {
     for (const child of this.children) {
-      if (child.tagName === tag) return child;
+      if (tag.startsWith('.') ? child.className?.split(' ').includes(tag.slice(1)) : child.tagName === tag) return child;
       const found = child.querySelector(tag);
       if (found) return found;
     }
@@ -56,6 +56,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     createElement: (tag) => new Element(tag),
     createElementNS: (_namespace, tag) => new Element(tag),
     body: new Element('body'),
+    documentElement: new Element('html'),
     elementFromPoint: () => hitElement,
   };
   let hitElement = null;
@@ -699,8 +700,8 @@ test('タスクの後選択、日別記録の割り当て、文字JSONの保存�
 
   await elements.get('nav-timer').trigger('click');
   await elements.get('main-action').trigger('click');
-  await elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
-  assert.equal(elements.get('task-picker-list').children[0].querySelector('button').disabled, true);
+  await elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
+  assert.equal(elements.get('task-picker-list').children[0].querySelector('.task-pick').disabled, true);
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
   app.advance(3000);
   await elements.get('end').trigger('click');
@@ -804,7 +805,7 @@ test('常時表示の入力欄から追加して選択し、計測開始で一�
   assert.equal(elements.get('active-task-name').textContent, '今から描く');
   await elements.get('main-action').trigger('click');
   assert.equal(elements.get('active-task-panel').hidden, true);
-  assert.equal(elements.get('task-picker-list').children[0].querySelector('button').disabled, true);
+  assert.equal(elements.get('task-picker-list').children[0].querySelector('.task-pick').disabled, true);
 
   elements.get('timer-quick-task-title').value = '次に描く';
   await elements.get('timer-quick-task-form').trigger('submit');
@@ -830,15 +831,15 @@ test('一覧から選び直し、計測・一時停止中は一覧を隠して�
     first.elements.get('timer-quick-task-title').value = title;
     await first.elements.get('timer-quick-task-form').trigger('submit');
   }
-  assert.equal(first.elements.get('task-picker-list').children[0].querySelector('button').disabled, false);
-  await first.elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  assert.equal(first.elements.get('task-picker-list').children[0].querySelector('.task-pick').disabled, false);
+  await first.elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
   assert.equal(first.elements.get('active-task-name').textContent, '構図を考える');
-  assert.equal(first.elements.get('task-picker-list').children[0].querySelector('button').getAttribute('aria-pressed'), 'true');
+  assert.equal(first.elements.get('task-picker-list').children[0].querySelector('.task-pick').getAttribute('aria-pressed'), 'true');
 
   const second = mount(storage);
   const { elements } = second;
   assert.equal(elements.get('active-task-name').textContent, '構図を考える');
-  await elements.get('task-picker-list').children[1].querySelector('button').trigger('click');
+  await elements.get('task-picker-list').children[1].querySelector('.task-pick').trigger('click');
   const taskId = JSON.parse(storage.get('practice-timer-v1')).selectedTaskId;
   assert.equal(elements.get('active-task-name').textContent, '線を練習する');
   const list = elements.get('task-picker-list');
@@ -847,15 +848,15 @@ test('一覧から選び直し、計測・一時停止中は一覧を隠して�
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
   assert.equal(list.children.length, 2);
   assert.equal(elements.get('active-task-panel').hidden, true);
-  assert.equal(list.children[0].querySelector('button').disabled, true);
-  assert.equal(list.children[1].querySelector('button').getAttribute('aria-pressed'), 'true');
+  assert.equal(list.children[0].querySelector('.task-pick').disabled, true);
+  assert.equal(list.children[1].querySelector('.task-pick').getAttribute('aria-pressed'), 'true');
   assert.equal(list.scrollTop, 120);
-  await list.children[0].querySelector('button').trigger('click');
+  await list.children[0].querySelector('.task-pick').trigger('click');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
   await elements.get('main-action').trigger('click');
-  assert.equal(list.children[0].querySelector('button').disabled, true);
+  assert.equal(list.children[0].querySelector('.task-pick').disabled, true);
   assert.equal(elements.get('active-task-panel').hidden, true);
-  await list.children[0].querySelector('button').trigger('click');
+  await list.children[0].querySelector('.task-pick').trigger('click');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
   assert.equal(list.scrollTop, 120);
   await elements.get('main-action').trigger('click');
@@ -864,9 +865,9 @@ test('一覧から選び直し、計測・一時停止中は一覧を隠して�
   const saved = JSON.parse(storage.get('practice-timer-v1'));
   assert.equal(saved.sessions[0].taskId, taskId);
   assert.equal(saved.selectedTaskId, null);
-  assert.equal(elements.get('task-picker-list').children[0].querySelector('button').disabled, false);
+  assert.equal(elements.get('task-picker-list').children[0].querySelector('.task-pick').disabled, false);
 
-  await elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
   await elements.get('nav-tasks').trigger('click');
   const check = elements.get('task-list').children[0].querySelector('input');
   check.checked = true;
@@ -892,12 +893,12 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   elements.get('timer-quick-task-title').value = '単語を覚える';
   await elements.get('timer-quick-task-form').trigger('submit');
   await elements.get('nav-tasks').trigger('click');
-  await elements.get('task-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-list').children[0].querySelector('.task-title-button').trigger('click');
   elements.get('task-first-step').value = '復習も含む\n例文を声に出す';
   elements.get('task-group').value = group.id;
   await elements.get('task-group').trigger('change');
   await elements.get('task-form').trigger('submit');
-  await elements.get('task-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-list').children[0].querySelector('.task-title-button').trigger('click');
   assert.equal(elements.get('task-first-step').value, '復習も含む\n例文を声に出す');
   await elements.get('task-cancel').trigger('click');
   await elements.get('nav-timer').trigger('click');
@@ -907,7 +908,7 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   assert.equal(elements.get('active-task-panel').hidden, true);
   await elements.get('nav-tasks').trigger('click');
   const selectedRow = elements.get('task-list').children[0];
-  await selectedRow.querySelector('button').trigger('click');
+  await selectedRow.querySelector('.task-title-button').trigger('click');
   assert.equal(elements.get('task-delete').disabled, true);
   await elements.get('task-delete').trigger('click');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks.length, 1);
@@ -931,7 +932,7 @@ test('タスク画面でメモとテーマを後から編集し、タイマー�
   check.checked = false;
   await check.trigger('change');
   await restored.elements.get('nav-timer').trigger('click');
-  await restored.elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  await restored.elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
   assert.equal(restored.elements.get('active-task-hint').textContent, saved.tasks[0].firstStep);
 });
 
@@ -948,7 +949,7 @@ test('未選択で開始したときはタイマーで後選択でき、選択�
   await elements.get('quick-task-form').trigger('submit');
   assert.equal(buttonNamed(elements.get('task-list').children[0], 'Use this task'), null);
   await elements.get('nav-timer').trigger('click');
-  await elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
   assert.equal(elements.get('active-task-panel').hidden, true);
   assert.equal(elements.get('active-task-name').textContent, '読む');
   const restored = mount(storage);
@@ -973,7 +974,7 @@ test('ドラッグで共有順序を保存し、上下キー・中止・再読�
   const app = mount(storage);
   const { elements } = app;
   const picker = elements.get('task-picker-list');
-  const handle = picker.children[0].children.at(-1);
+  const handle = picker.children[0].querySelector('.task-drag-handle');
   const target = picker.children[2];
   target.bounds = { top: 120, height: 56 };
   const pointer = { button: 0, pointerId: 1, clientX: 200, clientY: 10 };
@@ -991,13 +992,13 @@ test('ドラッグで共有順序を保存し、上下キー・中止・再読�
 
   await elements.get('main-action').trigger('click');
   await elements.get('nav-tasks').trigger('click');
-  await elements.get('task-list').children[0].children.at(-1).trigger('keydown', { key: 'ArrowDown' });
+  await elements.get('task-list').children[0].querySelector('.task-drag-handle').trigger('keydown', { key: 'ArrowDown' });
   saved = JSON.parse(storage.get('practice-timer-v1'));
   assert.deepEqual(saved.tasks.filter((task) => task.completedAt == null).map((task) => task.id), ['c', 'b', 'a']);
   assert.equal(saved.selectedTaskId, 'b');
-  assert.deepEqual(picker.children.map((row) => row.children[0].textContent), ['聞く', '書く', '読む']);
+  assert.deepEqual(picker.children.map((row) => row.querySelector('.task-pick').textContent), ['聞く', '書く', '読む']);
   const beforeCancel = storage.get('practice-timer-v1');
-  const cancelHandle = elements.get('task-list').children[0].children.at(-1);
+  const cancelHandle = elements.get('task-list').children[0].querySelector('.task-drag-handle');
   await cancelHandle.trigger('pointerdown', pointer);
   const cancelTarget = elements.get('task-list').children[2];
   cancelTarget.bounds = { top: 120, height: 56 };
@@ -1007,7 +1008,7 @@ test('ドラッグで共有順序を保存し、上下キー・中止・再読�
   await cancelHandle.trigger('pointerup', { ...pointer, clientY: 170 });
   assert.equal(storage.get('practice-timer-v1'), beforeCancel);
   const restored = mount(storage);
-  assert.deepEqual(restored.elements.get('task-picker-list').children.map((row) => row.children[0].textContent), ['聞く', '書く', '読む']);
+  assert.deepEqual(restored.elements.get('task-picker-list').children.map((row) => row.querySelector('.task-pick').textContent), ['聞く', '書く', '読む']);
   assert.equal(restored.elements.get('active-task-hint').textContent, '自由なメモ');
   assert.equal(restored.elements.get('active-task-panel').hidden, true);
   await restored.elements.get('backup-save').trigger('click');
@@ -1037,7 +1038,7 @@ test('空欄の+Addは詳細入力を開き、タイトル入力済みなら即�
   assert.equal(row.querySelector('summary'), null);
   assert.equal(row.querySelector('details'), null);
   assert.equal(buttonNamed(row, 'Use this task'), null);
-  await row.querySelector('button').trigger('click');
+  await row.querySelector('.task-title-button').trigger('click');
   assert.equal(elements.get('task-dialog').open, true);
   assert.equal(elements.get('task-dialog-title').textContent, 'Edit task');
   assert.equal(elements.get('task-title').value, '構図を考える');
@@ -1049,7 +1050,7 @@ test('空欄の+Addは詳細入力を開き、タイトル入力済みなら即�
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks[0].firstStep, 'ラフを3案描く');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, null);
   await elements.get('nav-timer').trigger('click');
-  await elements.get('task-picker-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
   assert.equal(elements.get('active-task-hint').textContent, 'ラフを3案描く');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).selectedTaskId, taskId);
 });
@@ -1068,11 +1069,11 @@ test('編集のCancelと削除確認の取り消しで内容を保ち、Delete�
   const storage = new Map([['practice-timer-v1', JSON.stringify(original)]]);
   const { elements } = mount(storage, undefined, 1_000_000, context => { context.confirm = () => approve; });
   await elements.get('nav-tasks').trigger('click');
-  await elements.get('task-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-list').children[0].querySelector('.task-title-button').trigger('click');
   elements.get('task-title').value = '未保存の変更';
   await elements.get('task-cancel').trigger('click');
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks[0].title, '構図を考える');
-  await elements.get('task-list').children[0].querySelector('button').trigger('click');
+  await elements.get('task-list').children[0].querySelector('.task-title-button').trigger('click');
   await elements.get('task-delete').trigger('click');
   assert.equal(elements.get('task-dialog').open, true);
   assert.equal(JSON.parse(storage.get('practice-timer-v1')).tasks.length, 2);
@@ -1100,12 +1101,12 @@ test('先頭へ追加し、未選択タスクは選択、選択済みタスク�
     await elements.get('timer-quick-task-form').trigger('submit');
   }
   const list = elements.get('task-picker-list');
-  assert.deepEqual(list.children.map((row) => row.children[0].textContent), ['新しいタスク', '古いタスク']);
-  const button = list.children[1].children[0];
+  assert.deepEqual(list.children.map((row) => row.querySelector('.task-pick').textContent), ['新しいタスク', '古いタスク']);
+  const button = list.children[1].querySelector('.task-pick');
   list.scrollTop = 120;
   await button.trigger('click');
   assert.equal(list.scrollTop, 120);
-  assert.equal(list.children[1].children[0], button);
+  assert.equal(list.children[1].querySelector('.task-pick'), button);
   assert.equal(elements.get('task-dialog').open, false);
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   await button.trigger('click');
@@ -1805,4 +1806,85 @@ test('自動開始の変更は進行中の次の境界へ適用し、不正なJS
   await elements.get('import-file').trigger('change');
   assert.match(elements.get('backup-status').textContent, /Invalid auto-start/);
   assert.equal(app.storage.get('practice-timer-v1'), before);
+});
+
+test('未設定で終了すると先に時間を保存し、Add taskで今回の全作業区間だけに分類を付ける', async () => {
+  const original = { id: 'older', recordGroupId: 'older-run', startedAt: 800000, endedAt: 801000,
+    workMs: 1000, taskId: null, taskTitle: null, targetId: null };
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    format: 'practice-timer-beta', version: 1,
+    steps: [{ type: 'work', minutes: 1 }, { type: 'rest', minutes: 1 }],
+    groups: [{ id: 'g', title: '絵', children: [{ id: 'c', title: '手' }] }], tasks: [],
+    sessions: [original], totalWorkMs: 1000, run: null,
+  })]]));
+  const { elements, storage } = app;
+  const saved = () => JSON.parse(storage.get('practice-timer-v1'));
+  await elements.get('main-action').trigger('click');
+  app.advance(2000);
+  await elements.get('main-action').trigger('click');
+  app.advance(1000);
+  await elements.get('main-action').trigger('click');
+  app.advance(3000);
+  await elements.get('end').trigger('click');
+  assert.equal(saved().run, null);
+  assert.equal(saved().totalWorkMs, 6000);
+  assert.equal(saved().sessions.length, 3);
+  assert.equal(elements.get('task-dialog').open, true);
+  assert.equal(elements.get('task-dialog-title').textContent, 'Add task');
+  app.advance(5000); app.tick();
+  assert.equal(saved().totalWorkMs, 6000);
+  elements.get('task-title').value = '手を描く';
+  elements.get('task-first-step').value = '指の付け根を観察';
+  elements.get('task-group').value = 'g';
+  await elements.get('task-group').trigger('change');
+  elements.get('task-child').value = 'c';
+  await elements.get('task-form').trigger('submit');
+  const ended = saved();
+  assert.equal(elements.get('task-dialog').open, false);
+  assert.deepEqual(ended.sessions[0], original);
+  assert.equal(ended.sessions.slice(1).reduce((sum, record) => sum + record.workMs, 0), 5000);
+  for (const record of ended.sessions.slice(1)) {
+    assert.equal(record.taskId, ended.tasks[0].id);
+    assert.equal(record.taskTitle, '手を描く');
+    assert.equal(record.targetId, 'c');
+  }
+  assert.equal(ended.tasks[0].firstStep, '指の付け根を観察');
+  assert.equal(ended.selectedTaskId, null);
+  const restored = mount(storage);
+  await restored.elements.get('nav-tasks').trigger('click');
+  assert.equal(restored.elements.get('task-list').children[0].querySelector('.task-title-button').textContent, '手を描く');
+  await restored.elements.get('nav-timer').trigger('click');
+  await restored.elements.get('task-picker-list').children[0].querySelector('.task-pick').trigger('click');
+  await restored.elements.get('main-action').trigger('click');
+  restored.advance(1000);
+  await restored.elements.get('end').trigger('click');
+  assert.equal(restored.elements.get('task-dialog').open, false);
+  assert.equal(saved().sessions.at(-1).taskTitle, '手を描く');
+});
+
+test('終了後のAdd taskをCancel・Escで閉じても実績を残し、次の通常追加に紐付けない', async () => {
+  for (const cancel of ['button', 'escape']) {
+    const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+      steps: [{ type: 'work', minutes: 1 }, { type: 'rest', minutes: 1 }], totalWorkMs: 0,
+    })]]));
+    const { elements, storage } = app;
+    await elements.get('main-action').trigger('click');
+    app.advance(2500);
+    await elements.get('end').trigger('click');
+    if (cancel === 'button') await elements.get('task-cancel').trigger('click');
+    else await elements.get('task-dialog').trigger('cancel');
+    assert.equal(elements.get('task-dialog').open, false);
+    let saved = JSON.parse(storage.get('practice-timer-v1'));
+    assert.equal(saved.run, null);
+    assert.equal(saved.totalWorkMs, 2500);
+    assert.equal(saved.sessions[0].taskId, null);
+    await elements.get('nav-tasks').trigger('click');
+    await elements.get('quick-task-form').trigger('submit');
+    elements.get('task-title').value = '次の練習';
+    await elements.get('task-form').trigger('submit');
+    saved = JSON.parse(storage.get('practice-timer-v1'));
+    assert.equal(saved.tasks.length, 1);
+    assert.equal(saved.sessions[0].taskId, null);
+    assert.equal(saved.sessions[0].workMs, 2500);
+  }
 });

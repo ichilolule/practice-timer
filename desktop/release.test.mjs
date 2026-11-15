@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { getCurrentFuseWire, FuseV1Options as F, FuseState } from '@electron/fuses';
 
-const bundle = fileURLToPath(new URL('../dist/Practice Timer.app', import.meta.url));
-const executable = path.join(bundle, 'Contents/MacOS/Practice Timer');
+const bundle = fileURLToPath(new URL('../dist/Latte Loop.app', import.meta.url));
+const executable = path.join(bundle, 'Contents/MacOS/Latte Loop');
 
 async function launch(profile, extraEnv = {}) {
   const child = spawn(executable, ['--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--inspect=0'], {
@@ -32,7 +32,7 @@ async function launch(profile, extraEnv = {}) {
   const context = browser.contexts()[0];
   const page = context.pages()[0] || await context.waitForEvent('page');
   await page.waitForSelector('#desktop-settings', { state: 'attached' });
-  assert.equal(await page.title(), 'Practice Timer');
+  assert.equal(await page.title(), 'Latte Loop');
   assert.equal(await page.locator('#desktop-banner').isVisible(), false);
   return { child, page, output: () => output, stop: async () => {
     const exit = once(child, 'exit');
@@ -91,7 +91,7 @@ test('hardened release starts normally despite injection flags, saves and restor
 test('release rejects a modified application archive before its code can run', { timeout: 60_000 }, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-tamper-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const copy = path.join(directory, 'Practice Timer.app');
+  const copy = path.join(directory, 'Latte Loop.app');
   await cp(bundle, copy, { recursive: true, verbatimSymlinks: true });
   const archive = path.join(copy, 'Contents/Resources/app.asar');
   const bytes = await readFile(archive);
@@ -99,7 +99,7 @@ test('release rejects a modified application archive before its code can run', {
   assert.ok(position > 8);
   bytes[position] = bytes[position] === 0x61 ? 0x62 : 0x61;
   await writeFile(archive, bytes);
-  const child = spawn(path.join(copy, 'Contents/MacOS/Practice Timer'), [], {
+  const child = spawn(path.join(copy, 'Contents/MacOS/Latte Loop'), [], {
     env: { ...process.env, PRACTICE_TIMER_DATA_DIR: path.join(directory, 'profile') }, stdio: ['ignore', 'ignore', 'pipe'],
   });
   let output = '';
