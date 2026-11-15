@@ -20,9 +20,10 @@ Web版と同じ画面・タイマー計算・JSON形式を使う、Electron製�
 - ウィンドウの閉じるボタンと `⌘W` は画面を隠します。計測とメニューバー表示は続きます。
 - 初期ショートカットは **`⌘⇧Space`：開始・一時停止・再開**、**`⌘⇧→`：次の工程へスキップ**、**`⌘⇧Return`：セッション終了**。別アプリの操作中も使えます。ショートカットによるセッション終了には確認画面が出ます。
 - Settings → 左列下部のShortcut keysで、入力欄を選んで新しいキーの組み合わせを押すと変更・保存できます。競合するキーはエラーを表示し、直前の設定を保ちます。設定欄でキーを記録している間はタイマー操作を止めます。
-- Settings → Soundで、作業開始・休憩開始と、開始・一時停止・再開・スキップ・終了の音を個別に選べます。Wood（木琴風）・Bell（ベル）・Water（水滴）・Electronic（電子音）の各5パターン、None（無音）、このMacの標準音が候補です。`Electronic (Start)`、`Electronic (Pause)` のように名前で区別し、同じ候補はどの操作に割り当てても同じ音になります。各欄の▶で試聴でき、選択と共通の音量（0〜200%）は自動保存します。
-- 画面のボタン・メニューバー・ショートカットは同じ操作音を鳴らします。設定不足で開始できない場合、計測していないときのスキップ、終了確認のCancel、キー設定の記録中、スリープ・アプリ終了による自動停止では鳴らしません。残り時間が00:00になる自動切り替えでは、Work started／Break startedに設定した音を1回鳴らして通知を表示します。開始ボタンではStart、手動スキップではNext phase (skip)の音を使い、切替音を重ねません。作業開始の既定音はBell (Start)、休憩開始はBell (End)です。Alerts・Pitchはありません。
+- Settings → Soundで、Next phase (Work)・Next phase (Break)と、開始・一時停止・再開・終了の音を個別に選べます。Wood（木琴風）・Bell（ベル）・Water（水滴）・Electronic（電子音）の各5パターン、None（無音）、このMacの標準音が候補です。`Electronic (Start)`、`Electronic (Pause)` のように名前で区別し、同じ候補はどの操作に割り当てても同じ音になります。各欄の▶で試聴でき、選択と共通の音量（0〜200%）は自動保存します。
+- 画面のボタン・メニューバー・ショートカットは同じ操作音を鳴らします。設定不足で開始できない場合、計測していないときのスキップ、終了確認のCancel、キー設定の記録中、スリープ・アプリ終了による自動停止では鳴らしません。00:00の到達時と手動Skipは、移行先に応じてNext phase (Work)／Next phase (Break)の共通音を使います。00:00到達時は1回鳴らして通知を表示し、自動開始オフなら現在の工程でOvertimeへ入ります。開始ボタンではStartの音を使います。作業開始の既定音はBell (Start)、休憩開始はBell (End)です。Alerts・Pitchはありません。
 - アプリ音はアプリ内で生成します。Mac標準音は `/System/Library/Sounds` の実在する音を起動時に一覧化して再生し、アプリ内やJSONに音源を複製しません。利用できないMac音を含むJSONを別のMacやWeb版へ読み込んだ場合は、選択を保ったまま操作に対応する電子音で代用し、その旨をSoundに表示します。
+- Shortcut keysの下のAuto-start next phaseで、移行先のWork／Breakを別々にオン・オフできます。初期値は両方オンです。Breakをオフにすると作業終了後、Workをオフにすると休憩終了後に現在の工程を超過計測します。Overtimeは暖色の点線リング・`+00:01`のような増加する時計・小さなOvertime表示で示します。Skipボタン、メニューバー、Next phase (skip)のショートカットで次へ進みます。作業の超過分は作業時間に含め、休憩の超過分は含めません。設定変更は次のカウントダウン終了から反映し、すでに始まったOvertimeはSkipするまで続きます。
 - メニューバーの「Quit Practice Timer」または `⌘Q` でアプリを終了します。終了時は計測を一時停止して保存し、次回は一時停止状態で復元します。Macのスリープ時も一時停止します。Macログイン時の自動起動は設定していません。
 
 ### 保存とWeb版からの移行
@@ -121,6 +122,7 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
 | `totalWorkMs` | 累計実作業時間、ミリ秒。計測途中ならその作業時間も含む。 |
 | `run` | 計測なしなら `null`。計測途中なら後述のオブジェクト。 |
 | `selectedTaskId` | 選択中のタスクID、または `null`。新規データは `null` を推奨。存在しないIDや、計測途中ではないときの完了済みタスクIDは、読み込み時に `null` になる。 |
+| `autoStart` | `{"work":true,"rest":true}` のような移行先ごとの自動開始設定。省略時は両方true。 |
 | `sound` | `volume`・`assignments` を持つ操作音・自動切替音の設定。 |
 | `dayStartMinutes` | 1日の区切り。午前0時からの分数、整数 `0`〜`1439`。初期値 `300`（5:00）。 |
 
@@ -195,7 +197,9 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
 | `steps` | その回のRoutine。Work・Breakの両方が必要。 |
 | `row`・`phase` | 現在の手順の0始まりの添字と種類。`steps[row].type` と `phase` は一致する。 |
 | `looping` | 最後のWork／Breakを交互に繰り返す段階かどうか。真偽値。 |
-| `remainingMs` | 現在の工程の残り時間。0より大きく、当該工程の設定時間以下。 |
+| `remainingMs` | 通常は0より大きく当該工程の設定時間以下。Overtimeでは0以下で、絶対値が超過時間。 |
+| `overtime` | 超過計測中かどうかの真偽値。省略時false。 |
+| `autoStart` | 計測に適用する自動開始設定。アプリでは最上位のautoStartと一致させる。 |
 | `status`・`lastTick` | バックアップでは `"paused"` と `null`。読み込み後は一時停止状態で復元する。 |
 | `totalWorkMs` | 計測途中分を含む累計。最上位の `totalWorkMs` と一致（許容誤差1ms）。 |
 | `sessionWorkMs` | この回で計測済みの実作業時間。まだ `sessions` に入っていない。 |
@@ -209,9 +213,9 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
 ### 音：`sound`
 
 - `volume` は整数 `0`〜`1000`。**画面の音量0〜200%とは尺度が違い、JSON値 = 画面の% × 5** です。画面10%は `50`、画面100%は `500`、画面200%は `1000`、消音は `0`。初期値は `50`。操作音・自動切替音・Mac標準音で共通です。
-- `assignments` は `start`・`pause`・`resume`・`skip`・`end`・`work`・`rest` の7項目を持つオブジェクトです。各値は `wood-start`、`electronic-pause` など「音色-パターン」の固定ID、`none`、または `mac:Glass.aiff` のようなMac音のIDです。音色は `wood`・`bell`・`water`・`electronic`、パターンは5操作（start／pause／resume／skip／end）と同名です。workは自動の作業開始、restは自動の休憩開始を表し、同じ候補から自由に選べます。例：`start: "electronic-end"` は開始操作でElectronic (End)を鳴らします。
-- Mac音のIDにはファイル名だけを含め、パスは使いません。`assignments` 全体や各項目を省略した場合、`start`・`pause`・`resume` は同名パターンのWood、`skip` は `electronic-skip`、`end` は `bell-end`、`work` は `bell-start`、`rest` は `bell-end` になります。
-- 従来のJSONは読み込めます。旧 `operationVolume` があれば共通音量へ引き継ぎ、旧 `wood` などのIDは割り当て先に対応する固定IDへ変換します。旧 `pitch` は使わず、新しく書き出すJSONにも含めません。旧work／restの音色IDはそれぞれStart／Pauseパターンへ変換します。
+- `assignments` は `start`・`pause`・`resume`・`end`・`work`・`rest` の6項目を持つオブジェクトです。各値は `wood-start`、`electronic-pause` など「音色-パターン」の固定ID、`none`、または `mac:Glass.aiff` のようなMac音のIDです。音色は `wood`・`bell`・`water`・`electronic`、パターンは5操作（start／pause／resume／skip／end）と同名です。workは次の作業、restは次の休憩への移行と時間到達の共通音を表し、同じ候補から自由に選べます。例：`start: "electronic-end"` は開始操作でElectronic (End)を鳴らします。
+- Mac音のIDにはファイル名だけを含め、パスは使いません。`assignments` 全体や各項目を省略した場合、`start`・`pause`・`resume` は同名パターンのWood、`end` は `bell-end`、`work` は `bell-start`、`rest` は `bell-end` になります。
+- 従来のJSONは読み込めます。旧 `operationVolume` があれば共通音量へ引き継ぎ、旧 `wood` などのIDは割り当て先に対応する固定IDへ変換します。旧 `pitch` と独立したskip割り当ては使わず、新しく書き出すJSONにも含めません。音源候補のElectronic (Skip)などは引き続き選べます。旧work／restの音色IDはそれぞれStart／Pauseパターンへ変換します。
 
 ## JSONを分析するときの集計ルール
 
@@ -262,10 +266,11 @@ JSONはUTF-8の標準JSONです。コメント、末尾カンマ、省略記号�
     "volume": 50,
     "assignments": {
       "start": "wood-start", "pause": "wood-pause", "resume": "wood-resume",
-      "skip": "electronic-skip", "end": "bell-end",
+      "end": "bell-end",
       "work": "bell-start", "rest": "bell-end"
     }
   },
+  "autoStart": { "work": true, "rest": true },
   "dayStartMinutes": 300
 }
 ```
@@ -301,9 +306,9 @@ JSONにはタスク名・メモ・作業日時が含まれます。画像、バ�
 
 ## 操作・表示・保存の詳しい説明
 
-配色は `styles.css` 冒頭の `:root` に集約しています。`--color-surface` はクリーム色の背景、`--color-sidebar` はタスク欄のブルー、`--color-text` は文字、`--color-primary` は主ボタンと時計、`--color-accent` は円とグラフ、`--color-selection` はナビの選択色です。休憩の数字色は `--color-rest`、書体は `--font-ui` で変更できます。境界線・入力欄・ダイアログ・バックアップの案内も共通変数を使います。
+配色は `styles.css` 冒頭の `:root` に集約しています。`--color-surface` はクリーム色の背景、`--color-sidebar` はタスク欄のブルー、`--color-text` は文字、`--color-primary` は主ボタンと時計、`--color-accent` は円とグラフ、`--color-selection` はナビの選択色です。休憩の数字色は `--color-rest`、超過の数字とリングは `--color-overtime`・`--color-overtime-ring`、書体は `--font-ui` で変更できます。境界線・入力欄・ダイアログ・バックアップの案内も共通変数を使います。
 
-文字はウィンドウ全体の倍率で縮めず、標準設定では本文・タスク名16px、補助情報14px前後、グラフ目盛り12pxを保ちます。ブラウザの文字サイズ・ズーム設定も反映します。アプリの最大幅は1000px相当で、タイマー円の表示枠は最大384px、見出しは最大30px、開始・一時停止ボタンは64〜80px、スキップ・停止は48pxの操作範囲と32pxのアイコン枠です。大きな窓では上限から拡大せず余白を増やします。調整用の寸法は `styles.css` 冒頭の変数にまとめています。幅401px以上ではTimerの左右配置、Reviewの合計とグラフ、Themes・Settingsの2列を保ち、小窓では余白やグラフの高さを詰めます。幅400px以下ではタイマーのタスク欄を下へ移し、Reviewの合計とグラフ、テーマカード、設定を縦1列に並べます。幅719px以下ではナビの文字を隠してアイコン表示にし、44px以上の操作範囲と読み上げ・ツールチップの操作名を残します。
+文字はウィンドウ全体の倍率で縮めず、標準設定では本文・タスク名16px、補助情報14px前後、グラフ目盛り12pxを保ちます。ブラウザの文字サイズ・ズーム設定も反映します。アプリの最大幅は1000px相当で、タイマー円の表示枠は最大384px、見出しは最大30px、開始・一時停止ボタンは64〜80px、スキップ・停止は48pxの操作範囲と32pxのアイコン枠です。大きな窓では上限から拡大せず余白を増やします。調整用の寸法は `styles.css` 冒頭の変数にまとめています。幅401px以上ではTimerの左右配置、Reviewの合計とグラフ、Settingsの2列を保ち、Themesは常に1列にし、小窓では余白やグラフの高さを詰めます。幅400px以下ではタイマーのタスク欄を下へ移し、Reviewの合計とグラフ、テーマカード、設定を縦1列に並べます。幅719px以下ではナビの文字を隠してアイコン表示にし、44px以上の操作範囲と読み上げ・ツールチップの操作名を残します。
 
 UIは直感的でシンプルな操作を優先します。繰り返し使う中で配置や記号に慣れることを前提に、画面内の説明や冗長な操作を減らし、詳しい使い方はこのREADMEにまとめます。保存失敗など、対処が必要な情報は画面内に表示します。
 
@@ -337,7 +342,7 @@ Dayの「Sessions」は時刻・鉛筆アイコン・タスク名・作業時間
 
 旧形式の記録には開始時刻がないため、「開始時刻なし」と表示し、終了時刻が属する集計日に合計します。時間帯を特定できないため日の24時間グラフには含めず、グラフの下に別掲します。日の合計・テーマタブの集計・週月年のグラフには含まれます。必要ならその記録の日時と作業時間を修正できます。振り返りメモはアプリには保存しません。
 
-Settingsは幅401px以上で左にRoutine・Day starts、右にNotifications・Sound・Backupの2列構成です。400px以下ではRoutineからBackupまで1列に並べます。Soundに共通音量と5操作・作業開始・休憩開始の音の選択欄・試聴ボタンを並べます。小窓でも選択欄が縮み、試聴ボタンの操作範囲を保ちます。NotificationsのOn／Off／Blocked／Unavailableは実際のブラウザ許可を示し、画面を開いたときやウィンドウに戻ったときに更新します。OSの通知抑制や集中モードの状態を示すものではありません。
+Settingsは幅401px以上で左にRoutine・Day starts、右にNotifications・Sound・Backupの2列構成です。400px以下ではRoutineからBackupまで1列に並べます。Soundに共通音量と4操作・Next phase (Work)・Next phase (Break)の音の選択欄・試聴ボタンを並べます。小窓でも選択欄が縮み、試聴ボタンの操作範囲を保ちます。NotificationsのOn／Off／Blocked／Unavailableは実際のブラウザ許可を示し、画面を開いたときやウィンドウに戻ったときに更新します。OSの通知抑制や集中モードの状態を示すものではありません。
 
 Settingsから、画像を含まないJSONを保存・読み込みできます。読み込みは現在のデータを置き換え、計測中は実行できません。通知の確認には、ブラウザが通知を許可できる環境が必要です。
 

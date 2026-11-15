@@ -1,7 +1,7 @@
 (() => {
 'use strict';
 
-const { advanceClock, createRun, normalizeSteps, pauseRun, resumeRun, restoreRun, skipPhase } = globalThis.TimerCore;
+const { advanceClock, createRun, normalizeSteps, normalizeAutoStart, nextPhaseType, pauseRun, resumeRun, restoreRun, skipPhase } = globalThis.TimerCore;
 const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodBuckets } = globalThis.PracticeData;
 
 const STORAGE_KEY = 'practice-timer-v1';
@@ -36,6 +36,7 @@ let editingRecordId = null;
 let renamingThemeItem = null;
 let audioContext = null;
 let soundSettings = validateSound(null);
+let autoStart = normalizeAutoStart();
 let macSounds = [];
 let macSoundsReady = Promise.resolve();
 let macSoundsFailed = false;
@@ -52,7 +53,7 @@ function load() {
     if (result && !result.ok) throw new Error(result.error);
     const saved = JSON.parse((desktop ? result.value : localStorage.getItem(STORAGE_KEY)) || '{}');
     if (saved.format === BACKUP_FORMAT) {
-      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = validateBackup(saved));
+      ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, autoStart, dayStartMinutes } = validateBackup(saved));
       return;
     }
     if (Array.isArray(saved.steps) && saved.steps.length) steps = normalizeSteps(saved.steps, { requireBoth: false });
@@ -81,7 +82,7 @@ function persist() {
     if (desktop && !localDataReadable) throw new Error('Saved data could not be read. Import a JSON backup to restore it.');
     const value = JSON.stringify({ format: BACKUP_FORMAT, version: 1,
       steps, run, totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
-      tasks, groups, sessions, selectedTaskId, sound: soundSettings, dayStartMinutes });
+      tasks, groups, sessions, selectedTaskId, sound: soundSettings, autoStart, dayStartMinutes });
     if (desktop) {
       const result = desktop.saveState(value);
       if (!result.ok) throw new Error(result.error || 'Could not save on this Mac.');
@@ -107,7 +108,7 @@ function publishDesktop() {
   let canStart = false;
   try { normalizeSteps(steps); canStart = localDataReadable; } catch {}
   desktop.publish({ status: run?.status || 'ready', phase: run?.phase || steps[0]?.type || 'work',
-    time: timeText(run?.remainingMs ?? (steps[0]?.minutes || 0) * 60_000, true),
+    time: run?.overtime ? `+${timeText(-run.remainingMs)}` : timeText(run?.remainingMs ?? (steps[0]?.minutes || 0) * 60_000, true),
     task: tasks.find(task => task.id === selectedTaskId)?.title || '', canStart });
 }
 
@@ -126,16 +127,19 @@ function renderTimer() {
   const activeSteps = run?.steps ?? steps;
   const phase = run?.phase ?? activeSteps[0]?.type;
   const phaseLabel = phase === 'work' ? 'Work' : 'Break';
-  const stateLabel = run ? (run.status === 'running' ? ' · running' : ' · paused') : ' · ready';
+  const stateLabel = run ? `${run.overtime ? ' · overtime' : ''}${run.status === 'running' ? ' · running' : ' · paused'}` : ' · ready';
   labelControl($('phase-name'), phase ? phaseLabel + stateLabel : 'No timer sequence');
   $('phase-icon').setAttribute('href', `#icon-${phase === 'work' ? 'work' : phase ? 'rest' : 'settings'}`);
   $('phase-paused').hidden = run?.status !== 'paused';
   const remainingMs = run?.remainingMs ?? ((steps[0]?.minutes || 0) * 60_000);
-  $('clock').textContent = timeText(remainingMs, true);
-  $('clock').classList.toggle('has-hours', remainingMs >= 3_600_000);
+  $('clock').textContent = run?.overtime ? `+${timeText(-remainingMs)}` : timeText(remainingMs, true);
+  $('clock').setAttribute('aria-label', run?.overtime ? 'Overtime' : 'Time remaining');
+  $('overtime-label').hidden = !run?.overtime;
+  $('timer-dial').classList.toggle('is-overtime', Boolean(run?.overtime));
+  $('clock').classList.toggle('has-hours', Math.abs(remainingMs) >= 3_600_000);
   const phaseMs = (activeSteps[run?.row ?? 0]?.minutes || 0) * 60_000;
   const remaining = phaseMs ? Math.max(0, Math.min(1, remainingMs / phaseMs)) : 0;
-  $('timer-ring-remaining').setAttribute('stroke-dasharray', `${remaining * 100} 100`);
+  $('timer-ring-remaining').setAttribute('stroke-dasharray', `${run?.overtime ? 100 : remaining * 100} 100`);
   $('timer-dial').classList.toggle('is-rest', phase === 'rest');
   $('timer-logged').textContent = durationText(run?.sessionWorkMs || 0);
   labelControl($('main-action'), run?.status === 'running' ? 'Pause' : run ? 'Resume' : steps.length ? 'Start' : 'Set up timer');
@@ -146,8 +150,7 @@ function renderTimer() {
   $('skip').disabled = !run;
   $('end').disabled = !run;
   if (run) {
-    const nextType = !run.looping && run.row < run.steps.length - 1
-      ? run.steps[run.row + 1].type : run.phase === 'work' ? 'rest' : 'work';
+    const nextType = nextPhaseType(run);
     labelControl($('skip'), nextType === 'work' ? 'Next work phase' : 'Skip to break');
   }
 }
@@ -1278,7 +1281,9 @@ function validateBackup(raw) {
       taskId: session.taskId || null, taskTitle: session.taskTitle || null,
       targetId: session.targetId || null };
   });
+  const restoredAutoStart = normalizeAutoStart(raw.autoStart);
   const restoredRun = raw.run == null ? null : restoreRun(raw.run);
+  if (restoredRun) restoredRun.autoStart = { ...restoredAutoStart };
   if (raw.run != null && !restoredRun) throw new Error('Invalid active session.');
   const restoredTotal = raw.totalWorkMs;
   const recorded = restoredSessions.reduce((sum, session) => sum + session.workMs, 0) + (restoredRun?.sessionWorkMs || 0);
@@ -1291,7 +1296,7 @@ function validateBackup(raw) {
     ? raw.selectedTaskId : null;
   return { steps: restoredSteps, tasks: restoredTasks, groups: restoredGroups,
     sessions: restoredSessions, run: restoredRun, totalWorkMs: restoredTotal,
-    selectedTaskId: restoredSelection, sound: validateSound(raw.sound),
+    selectedTaskId: restoredSelection, sound: validateSound(raw.sound), autoStart: restoredAutoStart,
     dayStartMinutes: validateDayStart(raw.dayStartMinutes) };
 }
 
@@ -1304,7 +1309,7 @@ function currentBackup() {
   return { format: BACKUP_FORMAT, version: 1, steps, tasks, groups, sessions,
     totalWorkMs: run?.totalWorkMs ?? totalWorkMs,
     run: run ? { ...run, status: 'paused', lastTick: null } : null,
-    selectedTaskId, sound: soundSettings, dayStartMinutes };
+    selectedTaskId, sound: soundSettings, autoStart, dayStartMinutes };
 }
 
 function renderNotificationPermission() {
@@ -1356,6 +1361,7 @@ function showSettings() {
   renderSettings();
   renderSoundSettings();
   renderDayStart();
+  renderAutoStart();
   $('import-file').disabled = Boolean(run);
   switchView('settings');
 }
@@ -1476,12 +1482,13 @@ async function previewSound(event) {
   }
 }
 
-function notifyPhase(phase) {
-  if (desktop) { desktop.notify(phase, run.steps[run.row].minutes); return; }
+function notifyPhase(phase, overtime = false) {
+  const title = overtime ? `${phase === 'work' ? 'Work' : 'Break'} time complete` : phase === 'work' ? 'Work started' : 'Break started';
+  if (desktop) { desktop.notify(phase, run.steps[run.row].minutes, overtime); return; }
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    new Notification(phase === 'work' ? 'Work started' : 'Break started', {
-      body: `${run.steps[run.row].minutes} minutes.`,
+    new Notification(title, {
+      body: overtime ? 'Overtime started. Choose Next phase when ready.' : `${run.steps[run.row].minutes} minutes.`,
       silent: true,
     });
   } catch {
@@ -1494,15 +1501,24 @@ function handleEvent(event, playPhaseSound = true) {
   if (event.kind === 'interrupted') {
     $('status').textContent = 'Paused after a long interruption.';
   } else {
-    notifyPhase(event.phase);
+    notifyPhase(event.phase, event.kind === 'overtime');
     if (playPhaseSound) {
       const phaseRun = run;
       const row = run.row;
-      void queueSound(event.phase, () => run === phaseRun && run.status === 'running' && run.row === row);
+      void queueSound(event.nextPhase || event.phase, () => run === phaseRun && run.status === 'running' && run.row === row);
     }
   }
   persist();
 }
+
+function renderAutoStart() {
+  for (const phase of ['work', 'rest']) $(`auto-start-${phase}`).checked = autoStart[phase];
+}
+for (const phase of ['work', 'rest']) $(`auto-start-${phase}`).addEventListener('change', () => {
+  autoStart = { ...autoStart, [phase]: $(`auto-start-${phase}`).checked };
+  if (run) run.autoStart = { ...autoStart };
+  $('auto-start-status').textContent = persist() ? '' : 'Could not save auto-start settings.';
+});
 
 $('settings-toggle').addEventListener('click', showSettings);
 $('sound-volume').addEventListener('input', () => updateSoundSettings());
@@ -1639,7 +1655,7 @@ function toggleTimer() {
     try { normalizeSteps(steps); }
     catch { showSettings(); return; }
     void prepareAudio();
-    run = createRun(steps, totalWorkMs, Date.now());
+    run = createRun(steps, totalWorkMs, Date.now(), autoStart);
     run.recordGroupId = newId();
     const startedRun = run;
     $('status').textContent = '';
@@ -1666,7 +1682,7 @@ function skipTimer() {
   handleEvent(event, false);
   const saved = persist();
   renderTimer();
-  if (saved && event?.kind === 'phase') return queueSound('skip');
+  if (saved && event?.kind === 'phase') return queueSound(event.phase);
 }
 $('skip').addEventListener('click', skipTimer);
 
@@ -1732,7 +1748,7 @@ $('import-file').addEventListener('change', async () => {
     if (file.size > 5_000_000) throw new Error('JSON files must be 5 MB or smaller.');
     const next = validateBackup(JSON.parse(await file.text()));
     if (!confirm('Replace all current data with this JSON backup?')) return;
-    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, dayStartMinutes } = next);
+    ({ steps, tasks, groups, sessions, run, totalWorkMs, selectedTaskId, sound: soundSettings, autoStart, dayStartMinutes } = next);
     localDataReadable = true;
     draft = steps.map(step => ({ ...step }));
     renderSettings();
@@ -1747,6 +1763,7 @@ $('import-file').addEventListener('change', async () => {
     renderTaskChoice();
     renderSoundSettings();
     renderDayStart();
+    renderAutoStart();
     $('backup-status').textContent = 'JSON imported.';
     if (!steps.length) showSettings();
   } catch (error) {

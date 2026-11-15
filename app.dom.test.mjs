@@ -266,11 +266,11 @@ test('共通音量0でボタン操作・試聴を消音し、音が使えなく�
   muted.elements.get('sound-volume').value = '10';
   await muted.elements.get('sound-volume').trigger('change');
   await muted.elements.get('skip').trigger('click');
-  assert.equal(audio.notes.length, 2);
-  assert.equal(audio.gains[0][1].value, 0.08);
+  assert.equal(audio.notes.length, 6);
+  assert.ok(Math.abs(audio.gains[0][1].value - 0.052) < 1e-10);
 });
 
-test('00:00の自動切替は作業・休憩の割り当て音を1回ずつ鳴らし、スキップ音と区別する', async () => {
+test('00:00の自動切替は作業・休憩の割り当て音を1回ずつ鳴らし、スキップでも同じ音を使う', async () => {
   const audio = recordAudio();
   const app = mount(new Map([['practice-timer-v1', JSON.stringify({
     format: 'practice-timer-beta', version: 1, groups: [], tasks: [], sessions: [],
@@ -292,7 +292,7 @@ test('00:00の自動切替は作業・休憩の割り当て音を1回ずつ鳴�
   assert.equal(app.elements.get('phase-name').getAttribute('aria-label'), 'Work · running');
   assert.deepEqual(audio.notes.slice(3).map(note => note.frequency.value), [660, 880]);
   await app.elements.get('skip').trigger('click');
-  assert.deepEqual(audio.notes.slice(5).map(note => note.frequency.value), [440]);
+  assert.deepEqual(audio.notes.slice(5).map(note => note.frequency.value), [880, 660, 440]);
   await app.elements.get('main-action').trigger('click');
   const pausedCount = audio.notes.length;
   app.advance(120_000);
@@ -1724,4 +1724,85 @@ test('テーマのドラッグ・上下キーで順序を即保存し、関連�
   await list.children[1].lastElementChild.trigger('click');
   assert.equal(elements.get('theme-details-dialog').open, true);
   assert.equal(elements.get('theme-details-title').textContent, '人体');
+});
+
+test('自動開始を作業・休憩別に保存し、超過表示・一時停止・Skip・実績に反映する', async () => {
+  const audio = recordAudio();
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    format: 'practice-timer-beta', version: 1, tasks: [], groups: [], sessions: [], totalWorkMs: 0,
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }],
+    sound: { volume: 50, assignments: { start: 'none', pause: 'none', resume: 'none', work: 'electronic-start', rest: 'electronic-end', end: 'none' } },
+  })]]), audio.AudioContext);
+  const { elements } = app;
+  await elements.get('settings-toggle').trigger('click');
+  assert.equal(elements.get('auto-start-work').checked, true);
+  assert.equal(elements.get('auto-start-rest').checked, true);
+  assert.equal(elements.has('sound-skip'), false);
+  for (const phase of ['work', 'rest']) {
+    elements.get(`auto-start-${phase}`).checked = false;
+    await elements.get(`auto-start-${phase}`).trigger('change');
+  }
+  await elements.get('nav-timer').trigger('click');
+  await elements.get('main-action').trigger('click');
+  app.advance(6000); app.tick();
+  await Promise.resolve();
+  assert.equal(elements.get('clock').textContent, '+00:00');
+  assert.equal(elements.get('overtime-label').hidden, false);
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Work · overtime · running');
+  assert.deepEqual(audio.notes.map(note => note.frequency.value), [880, 660, 440]);
+  app.advance(2000); app.tick();
+  assert.equal(elements.get('clock').textContent, '+00:02');
+  assert.equal(audio.notes.length, 3);
+  await elements.get('main-action').trigger('click');
+  app.advance(5000); app.tick();
+  assert.equal(elements.get('clock').textContent, '+00:02');
+  await elements.get('backup-save').trigger('click');
+  const backup = JSON.parse(await app.exportedBlob.text());
+  assert.equal(backup.run.overtime, true);
+  assert.equal(backup.run.sessionWorkMs, 8000);
+  assert.deepEqual(backup.autoStart, { work: false, rest: false });
+  const restored = mount(app.storage);
+  assert.equal(restored.elements.get('clock').textContent, '+00:02');
+  assert.equal(restored.elements.get('phase-name').getAttribute('aria-label'), 'Work · overtime · paused');
+  await restored.elements.get('settings-toggle').trigger('click');
+  assert.equal(restored.elements.get('auto-start-rest').checked, false);
+  await elements.get('skip').trigger('click');
+  assert.equal(elements.get('overtime-label').hidden, true);
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Break · running');
+  assert.deepEqual(audio.notes.slice(3).map(note => note.frequency.value), [880, 660, 440]);
+  app.advance(6000); app.tick();
+  await Promise.resolve();
+  assert.equal(elements.get('phase-name').getAttribute('aria-label'), 'Break · overtime · running');
+  assert.deepEqual(audio.notes.slice(6).map(note => note.frequency.value), [660, 880]);
+  app.advance(2000); app.tick();
+  await elements.get('end').trigger('click');
+  const saved = JSON.parse(app.storage.get('practice-timer-v1'));
+  assert.equal(saved.totalWorkMs, 8000);
+  assert.equal(saved.sessions.reduce((sum, record) => sum + record.workMs, 0), 8000);
+});
+
+test('自動開始の変更は進行中の次の境界へ適用し、不正なJSONでは既存データを保つ', async () => {
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
+  })]]));
+  const { elements } = app;
+  await elements.get('main-action').trigger('click');
+  await elements.get('settings-toggle').trigger('click');
+  elements.get('auto-start-rest').checked = false;
+  await elements.get('auto-start-rest').trigger('change');
+  app.advance(6000); app.tick();
+  await elements.get('nav-timer').trigger('click');
+  assert.equal(elements.get('clock').textContent, '+00:00');
+  elements.get('auto-start-rest').checked = true;
+  await elements.get('auto-start-rest').trigger('change');
+  app.advance(1000); app.tick();
+  assert.equal(elements.get('clock').textContent, '+00:01');
+  await elements.get('end').trigger('click');
+  const before = app.storage.get('practice-timer-v1');
+  const backup = JSON.parse(before);
+  backup.autoStart = { work: 'false', rest: true };
+  elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
+  await elements.get('import-file').trigger('change');
+  assert.match(elements.get('backup-status').textContent, /Invalid auto-start/);
+  assert.equal(app.storage.get('practice-timer-v1'), before);
 });

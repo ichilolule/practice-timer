@@ -205,7 +205,7 @@ async function start() {
   });
   ipcMain.on('desktop:state', (event, next) => {
     if (!trusted(event) || !next || !['ready', 'running', 'paused'].includes(next.status) ||
-        !/^\d{1,3}:\d{2}(?::\d{2})?$/.test(next.time)) return;
+        !/^\+?\d{1,3}:\d{2}(?::\d{2})?$/.test(next.time)) return;
     const previous = JSON.stringify(status);
     const wasReady = ready;
     status = { status: next.status, phase: next.phase === 'rest' ? 'rest' : 'work', time: next.time,
@@ -238,9 +238,10 @@ async function start() {
       return { ok: false, error: error.message, ...publicSettings() };
     }
   });
-  ipcMain.on('desktop:notify', (event, phase, minutes) => {
+  ipcMain.on('desktop:notify', (event, phase, minutes, overtime = false) => {
     if (trusted(event) && Notification.isSupported() && ['work', 'rest'].includes(phase) && Number.isFinite(minutes)) {
-      new Notification({ title: phase === 'work' ? 'Work started' : 'Break started', body: `${minutes} minutes.`, silent: true }).show();
+      new Notification({ title: overtime ? `${phase === 'work' ? 'Work' : 'Break'} time complete` : phase === 'work' ? 'Work started' : 'Break started',
+        body: overtime ? 'Overtime started. Choose Next phase when ready.' : `${minutes} minutes.`, silent: true }).show();
     }
   });
   handle('desktop:export', async value => {

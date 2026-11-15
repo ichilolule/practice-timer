@@ -65,6 +65,7 @@
                   <svg id="phase-paused" class="icon pause-badge" aria-hidden="true" hidden><use href="#icon-pause"/></svg>
                 </div>
                 <div id="clock" role="timer" aria-label="Time remaining">00:00</div>
+                <span id="overtime-label" hidden>Overtime</span>
               </div>
             </div>
           </div>
@@ -194,6 +195,13 @@
             <button id="desktop-shortcut-reset" type="button">Reset shortcuts</button>
             <p id="desktop-shortcut-status" role="status" aria-live="polite"></p>
           </section>
+          <section class="settings-section" aria-label="Auto-start next phase">
+            <h2>Auto-start next phase</h2>
+            <label class="auto-start-toggle" for="auto-start-work">Work<input id="auto-start-work" type="checkbox" role="switch" checked></label>
+            <label class="auto-start-toggle" for="auto-start-rest">Break<input id="auto-start-rest" type="checkbox" role="switch" checked></label>
+            <p class="subtle">When off, keep the current phase in overtime until you choose Next phase.</p>
+            <p id="auto-start-status" role="status"></p>
+          </section>
         </div>
         <div class="settings-column">
           <section class="settings-section" aria-label="Notifications">
@@ -212,14 +220,14 @@
                 <input id="sound-volume" type="range" min="0" max="200" step="1" value="10">
               </div>
               <div class="sound-choice">
-                <label for="sound-work">Work started</label>
-                <select id="sound-work" aria-label="Work started sound"></select>
-                <button id="preview-work" type="button" class="icon-button" aria-label="Preview work started sound" title="Preview work started sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+                <label for="sound-work">Next phase (Work)</label>
+                <select id="sound-work" aria-label="Next phase (Work) sound"></select>
+                <button id="preview-work" type="button" class="icon-button" aria-label="Preview next phase (Work) sound" title="Preview next phase (Work) sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
               <div class="sound-choice">
-                <label for="sound-rest">Break started</label>
-                <select id="sound-rest" aria-label="Break started sound"></select>
-                <button id="preview-rest" type="button" class="icon-button" aria-label="Preview break started sound" title="Preview break started sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
+                <label for="sound-rest">Next phase (Break)</label>
+                <select id="sound-rest" aria-label="Next phase (Break) sound"></select>
+                <button id="preview-rest" type="button" class="icon-button" aria-label="Preview next phase (Break) sound" title="Preview next phase (Break) sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
               <div class="sound-choice">
                 <label for="sound-start">Start</label>
@@ -235,11 +243,6 @@
                 <label for="sound-resume">Resume</label>
                 <select id="sound-resume" aria-label="Resume sound"></select>
                 <button id="preview-resume" type="button" class="icon-button" aria-label="Preview resume sound" title="Preview resume sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
-              </div>
-              <div class="sound-choice">
-                <label for="sound-skip">Next phase (skip)</label>
-                <select id="sound-skip" aria-label="Next phase (skip) sound"></select>
-                <button id="preview-skip" type="button" class="icon-button" aria-label="Preview next phase (skip) sound" title="Preview next phase (skip) sound"><svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg></button>
               </div>
               <div class="sound-choice">
                 <label for="sound-end">End session</label>

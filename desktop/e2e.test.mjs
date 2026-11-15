@@ -35,7 +35,7 @@ test('desktop: native menus, hidden timing, shortcuts, backups, suspend, restart
   await writeFile(path.join(directory, 'desktop-settings.json'), JSON.stringify({ shortcuts: { toggle: 'Control+Alt+Shift+F11', end: 'Control+Alt+Shift+F12' } }));
   await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify(fixture));
   let app = await launch(directory);
-  t.after(async () => { if (app) await app.close().catch(() => {}); });
+  t.after(() => { if (app) { try { app.process().kill('SIGKILL'); } catch {} } });
   let page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -69,7 +69,7 @@ test('desktop: native menus, hidden timing, shortcuts, backups, suspend, restart
   await page.waitForSelector('#desktop-settings:visible');
   assert.equal(await page.locator('#desktop-settings-title').textContent(), 'Shortcut keys');
   assert.equal(await page.locator('#desktop-shortcut-help').count(), 0);
-  assert.equal(await page.locator('.settings-column').first().locator('.settings-section').last().getAttribute('id'), 'desktop-settings');
+  assert.equal(await page.locator('.settings-column').first().locator('.settings-section').last().getAttribute('aria-label'), 'Auto-start next phase');
   assert.equal((await page.evaluate(() => practiceDesktop.settings())).shortcuts.skip, 'Command+Shift+Right');
   const shortcuts = { toggle: 'Control+Alt+Shift+F11', skip: 'Control+Alt+Shift+F9', end: 'Control+Alt+Shift+F12' };
   const result = await page.evaluate(value => practiceDesktop.setShortcuts(value), shortcuts);
@@ -292,14 +292,14 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   await command(app, 'settings');
   await page.waitForSelector('#sound-start:visible');
   await page.waitForFunction(() => document.querySelector('#sound-start optgroup[label="Mac sounds"]'));
-  for (const id of ['sound-pitch', 'sound-operation-volume', 'shortcut-sounds']) {
+  for (const id of ['sound-skip', 'sound-pitch', 'sound-operation-volume', 'shortcut-sounds']) {
     assert.equal(await page.locator(`#${id}`).count(), 0);
   }
   const sounds = await page.evaluate(() => practiceDesktop.sounds());
   const installed = (await readdir('/System/Library/Sounds')).filter(name => /\.(aiff?|wav|caf|m4a|mp3)$/i.test(name)).sort();
   assert.deepEqual(sounds.map(sound => sound.id), installed.map(name => `mac:${name}`));
   const builtIns = await page.evaluate(() => Object.keys(PracticeSounds.BUILT_INS));
-  for (const event of ['start', 'pause', 'resume', 'skip', 'end', 'work', 'rest']) {
+  for (const event of ['start', 'pause', 'resume', 'end', 'work', 'rest']) {
     assert.equal(await page.locator(`#sound-${event} option`).count(), sounds.length + builtIns.length);
     const labels = await page.locator(`#sound-${event} option`).allTextContents();
     assert.equal(new Set(labels).size, labels.length);
@@ -336,7 +336,7 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   await page.selectOption('#sound-end', sounds[0].id);
   await page.locator('#preview-end').click();
   await page.waitForFunction(() => !document.getElementById('preview-end').disabled);
-  const assigned = { start: 'electronic-end', pause: 'electronic-pause', resume: 'electronic-start', skip: 'electronic-resume', end: 'electronic-skip' };
+  const assigned = { start: 'electronic-end', pause: 'electronic-pause', resume: 'electronic-start', work: 'electronic-resume', rest: 'electronic-resume', end: 'electronic-skip' };
   for (const [event, id] of Object.entries(assigned)) await page.selectOption(`#sound-${event}`, id);
   await volume(0);
   for (const event of Object.keys(assigned)) assert.equal(await page.locator(`#preview-${event}`).isDisabled(), true);
@@ -563,4 +563,88 @@ test('automatic phase sounds while hidden, 200% settings, compact themes and Web
   await web.close();
   assert.deepEqual(errors, []);
   await quit(app);
+});
+
+test('overtime UI, destination sounds, native skip shortcut, settings and restart', { timeout: 60_000 }, async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-overtime-'));
+  let app, appProcess;
+  t.after(async () => {
+    if (appProcess && appProcess.exitCode == null) appProcess.kill('SIGKILL');
+    await rm(directory, { recursive: true, force: true });
+  });
+  await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify({ ...fixture,
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }],
+    autoStart: { work: false, rest: false },
+    sound: { volume: 5, assignments: { start: 'none', pause: 'none', resume: 'none', end: 'none', work: 'electronic-start', rest: 'electronic-end' } },
+  }));
+  app = await launch(directory); appProcess = app.process();
+  let page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.waitForSelector('#main-action');
+  await app.evaluate(({ Tray, globalShortcut }) => {
+    const title = Tray.prototype.setTitle;
+    Tray.prototype.setTitle = function (value, options) { globalThis.trayTime = value; return title.call(this, value, options); };
+    globalThis.keys = new Map();
+    const register = globalShortcut.register;
+    globalShortcut.register = (key, callback) => { keys.set(key, callback); return register.call(globalShortcut, key, callback); };
+  });
+  const shortcuts = { toggle: 'Control+Alt+Shift+F11', skip: 'Control+Alt+Shift+F9', end: 'Control+Alt+Shift+F12' };
+  assert.equal((await page.evaluate(value => practiceDesktop.setShortcuts(value), shortcuts)).ok, true);
+  await page.evaluate(() => {
+    globalThis.played = [];
+    const original = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function (...args) {
+      const oscillator = original.apply(this, args), start = oscillator.start.bind(oscillator);
+      oscillator.start = value => { played.push(oscillator.frequency.value); start(value); };
+      return oscillator;
+    };
+  });
+  await page.locator('#settings-toggle').click();
+  assert.equal(await page.locator('#auto-start-work').isChecked(), false);
+  assert.equal(await page.locator('#auto-start-rest').isChecked(), false);
+  assert.equal(await page.locator('#sound-skip').count(), 0);
+  assert.equal(await page.locator('label[for="sound-work"]').textContent(), 'Next phase (Work)');
+  assert.equal(await page.evaluate(() => document.getElementById('desktop-settings').nextElementSibling.getAttribute('aria-label')), 'Auto-start next phase');
+  await page.screenshot({ path: '/private/tmp/practice-timer-overtime-settings.png', fullPage: true });
+  await page.locator('#nav-timer').click();
+  await page.locator('#main-action').click();
+  await page.waitForFunction(() => document.getElementById('clock').textContent === '+00:02');
+  assert.equal((await state(page)).run.phase, 'work');
+  assert.deepEqual(await page.evaluate(() => played), [880, 660, 440]);
+  assert.match(await app.evaluate(() => trayTime), /^\+00:02$/);
+  assert.equal(await page.locator('#overtime-label').isVisible(), true);
+  await page.screenshot({ path: '/private/tmp/practice-timer-overtime-wide.png' });
+  await page.locator('#main-action').click();
+  const work = (await state(page)).run.sessionWorkMs;
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
+  await app.evaluate((_electron, key) => keys.get(key)(), shortcuts.skip);
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.phase === 'rest');
+  assert.deepEqual(await page.evaluate(() => played), [880, 660, 440, 880, 660, 440]);
+  await page.waitForFunction(() => document.getElementById('clock').textContent === '+00:01');
+  assert.equal((await state(page)).run.phase, 'rest');
+  assert.equal((await state(page)).run.sessionWorkMs, work);
+  assert.deepEqual(await page.evaluate(() => played), [880, 660, 440, 880, 660, 440, 660, 880]);
+  await command(app, 'toggle');
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.status === 'paused');
+  const remaining = (await state(page)).run.remainingMs;
+  await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.show(); window.setSize(360, 740); });
+  await page.waitForFunction(() => innerWidth === 360);
+  await page.screenshot({ path: '/private/tmp/practice-timer-overtime-small.png' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await quit(app); app = null;
+  app = await launch(directory); appProcess = app.process(); page = await app.firstWindow();
+  await page.waitForSelector('#main-action');
+  assert.equal((await state(page)).run.remainingMs, remaining);
+  assert.equal((await state(page)).run.overtime, true);
+  assert.equal(await page.locator('#main-action').getAttribute('aria-label'), 'Resume');
+  await command(app, 'skip');
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.phase === 'work');
+  assert.equal((await state(page)).run.overtime, false);
+  assert.equal(await page.locator('#overtime-label').isVisible(), false);
+  await command(app, 'end');
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run === null);
+  assert.ok((await state(page)).totalWorkMs >= work);
+  assert.deepEqual(errors, []);
+  await quit(app); app = null;
 });

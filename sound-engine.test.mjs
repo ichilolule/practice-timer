@@ -9,7 +9,7 @@ test('old operation settings migrate to fixed sound IDs; new settings round-trip
   assert.equal(settings.volume, 99);
   assert.equal('pitch' in settings, false);
   settings.volume = 0;
-  settings.assignments = { start: 'wood-start', pause: 'mac:Glass.aiff', resume: 'electronic-resume', skip: 'water-skip', end: 'none', work: 'bell-start', rest: 'bell-end' };
+  settings.assignments = { start: 'wood-start', pause: 'mac:Glass.aiff', resume: 'electronic-resume', end: 'none', work: 'bell-start', rest: 'bell-end' };
   assert.deepEqual(validateSound(JSON.parse(JSON.stringify(settings))), settings);
   assert.equal(validateSound({ volume: 300, operationVolume: 25, pitch: 12, assignments: { start: 'wood' } }).volume, 25);
   assert.equal(validateSound({ volume: 300, operationVolume: 25, assignments: { start: 'wood' } }).assignments.start, 'wood-start');

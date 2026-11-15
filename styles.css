@@ -9,6 +9,8 @@
   --color-on-primary: #fff8f1;
   --color-accent: #79a7c5;
   --color-rest: var(--color-accent);
+  --color-overtime: #975019;
+  --color-overtime-ring: #b87534;
   --color-selection: #cbdfee;
   --color-hover: #e7e2dc;
   --color-border: #cbbcaf;
@@ -43,6 +45,8 @@ body { margin: 0; }
 .desktop-shortcuts { display: grid; gap: .75rem; margin-bottom: .75rem; }
 .desktop-shortcuts label { display: grid; gap: .25rem; }
 .desktop-shortcuts input { width: 100%; padding: .5rem; border: 1px solid var(--color-border); border-radius: .375rem; cursor: pointer; }
+.auto-start-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; gap: 1rem; cursor: pointer; }
+.auto-start-toggle input { width: 1.5rem; height: 1.5rem; margin: 0; accent-color: var(--color-primary); cursor: pointer; }
 input, select, textarea { color: var(--color-text); background: var(--color-surface); }
 input::placeholder, textarea::placeholder { color: var(--color-muted); opacity: 1; }
 button, input, select, textarea { font: inherit; }
@@ -262,6 +266,10 @@ dialog h2 { margin-top: 0; }
 #clock { width: 100%; margin: 0; font-size: 24cqi; font-weight: 650; letter-spacing: -.055em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--color-primary); }
 #clock.has-hours { font-size: 17cqi; }
 .is-rest #clock { color: var(--color-rest); }
+.is-overtime #clock { color: var(--color-overtime); font-size: 21cqi; }
+.is-overtime #clock.has-hours { font-size: 15cqi; }
+.is-overtime #timer-ring-remaining { stroke: var(--color-overtime-ring); stroke-dasharray: 2 2; }
+#overtime-label { color: var(--color-overtime); font-size: 4cqi; font-weight: 650; letter-spacing: .04em; }
 .timer-controls { display: grid; grid-template-columns: 3rem var(--timer-action-size) 3rem; align-items: center; justify-content: center; gap: .75rem; margin-top: clamp(.5rem, 2dvh, 1.5rem); }
 #main-action { grid-column: 2; width: var(--timer-action-size); height: var(--timer-action-size); padding: 0; border: 0; border-radius: 50%; background: var(--color-primary); color: var(--color-on-primary); }
 #main-action:hover { background: var(--color-text); }

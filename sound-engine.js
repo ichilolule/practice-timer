@@ -2,7 +2,7 @@
 'use strict';
 
 const PATTERNS = Object.freeze(['start', 'pause', 'resume', 'skip', 'end']);
-const EVENTS = Object.freeze([...PATTERNS, 'work', 'rest']);
+const EVENTS = Object.freeze(['start', 'pause', 'resume', 'end', 'work', 'rest']);
 const FALLBACK_PATTERNS = Object.freeze({ work: 'start', rest: 'pause' });
 const EVENT_LABELS = Object.freeze({ start: 'Start', pause: 'Pause', resume: 'Resume', skip: 'Skip', end: 'End' });
 const TIMBRES = Object.freeze({ wood: 'Wood', bell: 'Bell', water: 'Water', electronic: 'Electronic' });
@@ -12,7 +12,7 @@ const BUILT_INS = Object.freeze(Object.fromEntries([
   ['none', 'None'],
 ]));
 const DEFAULT_ASSIGNMENTS = Object.freeze({ start: 'wood-start', pause: 'wood-pause', resume: 'wood-resume',
-  skip: 'electronic-skip', end: 'bell-end', work: 'bell-start', rest: 'bell-end' });
+  end: 'bell-end', work: 'bell-start', rest: 'bell-end' });
 const DEFAULT_SOUND = Object.freeze({ volume: 50, assignments: DEFAULT_ASSIGNMENTS });
 const MAC_SOUND = /^mac:[^/\\\u0000-\u001f]{1,100}\.(?:aiff?|wav|caf|m4a|mp3)$/i;
 
