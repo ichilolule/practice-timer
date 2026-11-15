@@ -444,3 +444,123 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   assert.deepEqual(errors, []);
   await quit(app); app = null;
 });
+
+test('automatic phase sounds while hidden, 200% settings, compact themes and Web fallback', { timeout: 60_000 }, async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'practice-timer-phase-sounds-'));
+  let app, appProcess;
+  t.after(async () => {
+    if (appProcess && appProcess.exitCode == null) appProcess.kill('SIGKILL');
+    await rm(directory, { recursive: true, force: true });
+  });
+  const groups = ['人体', '背景', '色彩', '構図', '線画', '作品制作', '長いテーマ名でも時間とバーが読み取れることを確認するためのテーマ'].map((title, index) => ({
+    id: `theme-${index}`, title, children: [],
+  }));
+  await writeFile(path.join(directory, 'practice-timer.json'), JSON.stringify({ ...fixture,
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], groups,
+    sessions: groups.map((group, index) => ({ id: `record-${index}`, startedAt: null, endedAt: Date.now(),
+      workMs: (7 - index) * 3_600_000, targetId: group.id })), totalWorkMs: 28 * 3_600_000,
+    sound: { volume: 5, assignments: { start: 'none', pause: 'none', work: 'electronic-start', rest: 'electronic-end' } },
+  }));
+  app = await launch(directory);
+  appProcess = app.process();
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.waitForSelector('#main-action');
+  await page.evaluate(() => {
+    globalThis.played = [];
+    const original = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function (...args) {
+      const oscillator = original.apply(this, args);
+      const start = oscillator.start.bind(oscillator);
+      oscillator.start = value => { played.push(oscillator.frequency.value); start(value); };
+      return oscillator;
+    };
+  });
+  await page.locator('#main-action').click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
+  await page.waitForFunction(() => played.length === 3);
+  assert.deepEqual(await page.evaluate(() => played), [880, 660, 440]);
+  assert.equal((await state(page)).run.phase, 'rest');
+  await page.waitForFunction(() => played.length === 5);
+  assert.deepEqual(await page.evaluate(() => played), [880, 660, 440, 660, 880]);
+  assert.equal((await state(page)).run.phase, 'work');
+  await command(app, 'toggle');
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).run.status === 'paused');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
+  await page.locator('#settings-toggle').click();
+  assert.equal(await page.locator('#sound-volume').getAttribute('max'), '200');
+  await page.locator('#sound-volume').evaluate(element => {
+    element.value = '200'; element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  assert.equal(await page.locator('#sound-volume-value').textContent(), '200%');
+  assert.equal((await state(page)).sound.volume, 1000);
+  await page.locator('#nav-themes').click();
+  const rows = page.locator('#group-list .theme-row');
+  const first = await rows.nth(0).locator('.task-drag-handle').boundingBox();
+  const third = await rows.nth(2).boundingBox();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(third.x + 20, third.y + third.height - 8, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForFunction(() => JSON.parse(practiceDesktop.loadState().value).groups[0].id === 'theme-1');
+  assert.deepEqual((await state(page)).groups.slice(0, 3).map(group => group.id), ['theme-1', 'theme-2', 'theme-0']);
+  assert.equal(await page.locator('#theme-details-dialog').isVisible(), false);
+  const layout = await rows.evaluateAll(elements => elements.map(element => {
+    const bounds = element.getBoundingClientRect(); return { left: bounds.left, height: bounds.height };
+  }));
+  assert.equal(new Set(layout.map(row => row.left)).size, 1);
+  assert.ok(layout.every(row => row.height <= 64));
+  await page.screenshot({ path: '/private/tmp/practice-timer-themes-wide.png' });
+  await page.locator('#theme-card-theme-0').click();
+  assert.equal(await page.locator('#theme-details-title').textContent(), '人体');
+  await page.locator('#theme-details-close').click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1.5));
+  await page.waitForFunction(() => innerWidth < 800 && document.documentElement.scrollWidth <= innerWidth);
+  assert.equal(await rows.evaluateAll(elements => elements.every(element => element.getBoundingClientRect().right <= innerWidth)), true);
+  const zoomImage = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].capturePage()).toPNG().toString('base64'));
+  await writeFile('/private/tmp/practice-timer-themes-zoom.png', Buffer.from(zoomImage, 'base64'));
+  assert.equal(await rows.evaluateAll(elements => new Set(elements.map(element => element.getBoundingClientRect().left)).size), 1);
+  await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.webContents.setZoomFactor(1); window.setSize(360, 740); });
+  await page.waitForFunction(() => innerWidth === 360);
+  await page.screenshot({ path: '/private/tmp/practice-timer-themes-small.png' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
+  const webWindow = app.waitForEvent('window');
+  await app.evaluate(async ({ BrowserWindow }, url) => {
+    const web = new BrowserWindow({ width: 390, height: 844, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+    await web.loadURL(url);
+  }, page.url());
+  const web = await webWindow;
+  web.on('pageerror', error => errors.push(error.message));
+  await web.waitForSelector('#main-action');
+  assert.equal(await web.evaluate(() => typeof practiceDesktop), 'undefined');
+  await web.locator('#settings-toggle').click();
+  assert.equal(await web.locator('optgroup[label="Mac sounds"]').count(), 0);
+  const backup = await state(page);
+  backup.sound.assignments.work = 'mac:Glass.aiff';
+  backup.sound.assignments.rest = 'mac:Glass.aiff';
+  await web.addInitScript(value => { localStorage.setItem('practice-timer-v1', JSON.stringify(value)); }, backup);
+  await web.reload();
+  await web.locator('#settings-toggle').click();
+  assert.equal(await web.locator('#sound-work').inputValue(), 'mac:Glass.aiff');
+  assert.match(await web.locator('#sound-availability').textContent(), /unavailable/);
+  assert.equal(await web.locator('#sound-volume-value').textContent(), '200%');
+  // Avoid physical playback at 200%; verify the same synthesis path in an offline context.
+  const rendered = await web.evaluate(async () => {
+    const context = new OfflineAudioContext(1, 44_100, 44_100);
+    PracticeSounds.synthesize(context, `electronic-${PracticeSounds.FALLBACK_PATTERNS.work}`, 1000);
+    const samples = (await context.startRendering()).getChannelData(0);
+    return samples.some(value => Math.abs(value) > 0.01);
+  });
+  assert.equal(rendered, true);
+  await web.locator('#sound-volume').evaluate(element => { element.value = '1'; element.dispatchEvent(new Event('change', { bubbles: true })); });
+  for (const event of ['work', 'rest']) {
+    await web.locator(`#preview-${event}`).click();
+    await web.waitForFunction(event => !document.getElementById(`preview-${event}`).disabled, event);
+    assert.equal(await web.locator('#sound-status').textContent(), '');
+  }
+  await web.close();
+  assert.deepEqual(errors, []);
+  await quit(app);
+});

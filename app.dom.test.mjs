@@ -676,7 +676,7 @@ test('タスクの後選択、日別記録の割り当て、文字JSONの保存�
   await elements.get('nav-growth').trigger('click');
   elements.get('group-title').value = '人体';
   await elements.get('group-form').trigger('submit');
-  await elements.get('group-list').children[0].trigger('click');
+  await elements.get('group-list').children[0].lastElementChild.trigger('click');
   const childForm = elements.get('theme-details-content').querySelector('form');
   childForm.querySelector('input').value = '手';
   await childForm.trigger('submit');
@@ -1247,8 +1247,8 @@ test('作業時間をh・m表記に統一し、秒の精度と開始・終了時
   assert.equal(elements.get('growth-all-total').textContent, 'All time 126h 30m');
   await elements.get('nav-themes').trigger('click');
   await elements.get('theme-period-day').trigger('click');
-  const group = elements.get('group-list').children[0];
-  assert.equal(group.children[0].textContent, '人体');
+  const group = elements.get('group-list').children[0].lastElementChild;
+  assert.equal(group.children[0].children[0].textContent, '人体');
   assert.equal(group.children[1].children[0].children[1].textContent, '1h 00m');
   await group.trigger('click');
   assert.equal(elements.get('theme-details-dialog').open, true);
@@ -1298,7 +1298,7 @@ test('テーマの横棒は共通目盛りで0時間も示し、サブテーマ�
   assert.equal(elements.get('nav-themes').getAttribute('aria-current'), 'page');
   assert.equal(elements.get('theme-period-all').getAttribute('aria-pressed'), 'true');
   assert.equal(elements.get('theme-scale-max').textContent, '100h 00m');
-  const cards = elements.get('group-list').children;
+  const cards = elements.get('group-list').children.map(row => row.lastElementChild);
   assert.equal(cards.length, 3);
   const practiceBar = cards[0].children[1];
   const colorBar = cards[1].children[1];
@@ -1320,7 +1320,7 @@ test('テーマの横棒は共通目盛りで0時間も示し、サブテーマ�
   await elements.get('theme-details-close').trigger('click');
   assert.equal(elements.get('theme-details-dialog').open, false);
   await elements.get('theme-period-day').trigger('click');
-  const todayColor = elements.get('group-list').children[1];
+  const todayColor = elements.get('group-list').children[1].lastElementChild;
   await todayColor.trigger('click');
   assert.equal(elements.get('theme-details-content').children[1].children[1].textContent, 'Reference 2h 30m');
   assert.deepEqual(elements.get('theme-details-content').querySelector('tbody').children.map((row) => row.children[2].textContent),
@@ -1348,7 +1348,7 @@ test('テーマとサブテーマの名前はアプリ内で変更でき、記�
       : node.children.map(visit).find(Boolean);
     return visit(card);
   };
-  await elements.get('group-list').children[0].trigger('click');
+  await elements.get('group-list').children[0].lastElementChild.trigger('click');
   await findRename(elements.get('theme-details-title'), 'Rename 人体').trigger('click');
   assert.equal(elements.get('theme-name-dialog').open, true);
   assert.equal(elements.get('theme-name-title').textContent, 'Theme name');
@@ -1385,7 +1385,7 @@ test('名前横のペンから削除でき、確認の取り消しと記録・�
     context => { context.confirm = () => accept; });
   const find = (node, label) => node.getAttribute('aria-label') === label ? node : node.children.map(child => find(child, label)).find(Boolean);
   await elements.get('nav-themes').trigger('click');
-  let card = elements.get('group-list').children[0];
+  let card = elements.get('group-list').children[0].lastElementChild;
   await card.trigger('click');
   let prevented = false, stopped = false;
   await find(elements.get('theme-details-title'), 'Rename 人体').trigger('click', {
@@ -1411,7 +1411,7 @@ test('名前横のペンから削除でき、確認の取り消しと記録・�
   assert.equal(saved.sessions[0].targetId, null);
   assert.equal(saved.sessions[1].targetId, 'body');
   assert.equal(saved.totalWorkMs, 900_000);
-  card = elements.get('group-list').children[0];
+  card = elements.get('group-list').children[0].lastElementChild;
   assert.equal(elements.get('theme-details-dialog').open, true);
   await find(elements.get('theme-details-title'), 'Rename 人体').trigger('click');
   await elements.get('theme-name-delete').trigger('click');
@@ -1666,4 +1666,62 @@ test('通知状態はブラウザの実際の許可を示し、未許可のと�
     await app.elements.get('settings-toggle').trigger('click');
     assert.equal(app.elements.get('notification-state').textContent, 'Blocked');
   }
+});
+
+test('テーマのドラッグ・上下キーで順序を即保存し、関連付け・中止・JSON・再読込を保つ', async () => {
+  const groups = [
+    { id: 'a', title: '人体', children: [{ id: 'hand', title: '手' }] },
+    { id: 'b', title: '背景', children: [] },
+    { id: 'c', title: '色彩', children: [] },
+  ];
+  const tasks = [{ id: 'task', title: '手の練習', firstStep: '', targetId: 'hand', completedAt: null }];
+  const sessions = [{ id: 'record', recordGroupId: 'record', startedAt: null, endedAt: 900_000,
+    workMs: 5000, targetId: 'hand', taskId: null, taskTitle: null }];
+  const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+    format: 'practice-timer-beta', version: 1, groups, tasks, sessions,
+    steps: [], run: null, totalWorkMs: 5000,
+  })]]));
+  const { elements } = app;
+  await elements.get('nav-themes').trigger('click');
+  const list = elements.get('group-list');
+  const handle = list.children[0].children[0];
+  const target = list.children[2];
+  target.bounds = { top: 120, height: 56 };
+  const pointer = { button: 0, pointerId: 1, clientX: 20, clientY: 10 };
+  await handle.trigger('pointerdown', pointer);
+  app.hit(target.lastElementChild);
+  await handle.trigger('pointermove', { ...pointer, clientY: 170 });
+  await handle.trigger('pointerup', { ...pointer, clientY: 170 });
+  let saved = JSON.parse(app.storage.get('practice-timer-v1'));
+  assert.deepEqual(saved.groups.map(group => group.id), ['b', 'c', 'a']);
+  assert.deepEqual(saved.groups[2], groups[0]);
+  assert.deepEqual(saved.tasks, tasks);
+  assert.deepEqual(saved.sessions, sessions);
+  assert.equal(elements.get('theme-details-dialog').open, false);
+  await list.children[2].children[0].trigger('keydown', { key: 'ArrowUp' });
+  saved = JSON.parse(app.storage.get('practice-timer-v1'));
+  assert.deepEqual(saved.groups.map(group => group.id), ['b', 'a', 'c']);
+  const beforeCancel = app.storage.get('practice-timer-v1');
+  const cancelHandle = list.children[0].children[0];
+  await cancelHandle.trigger('pointerdown', pointer);
+  app.hit(list.children[2]);
+  await cancelHandle.trigger('pointermove', { ...pointer, clientY: 170 });
+  await cancelHandle.trigger('pointercancel', pointer);
+  await cancelHandle.trigger('pointerup', { ...pointer, clientY: 170 });
+  assert.equal(app.storage.get('practice-timer-v1'), beforeCancel);
+  const restored = mount(app.storage);
+  await restored.elements.get('nav-themes').trigger('click');
+  assert.deepEqual(restored.elements.get('group-list').children.map(row => row.getAttribute('data-theme-id')), ['b', 'a', 'c']);
+  assert.equal(restored.elements.get('theme-unset').children[0].children.length, 1);
+  await elements.get('backup-save').trigger('click');
+  const backup = JSON.parse(await app.exportedBlob.text());
+  assert.deepEqual(backup.groups, saved.groups);
+  assert.equal(backup.totalWorkMs, 5000);
+  elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
+  await elements.get('import-file').trigger('change');
+  await elements.get('nav-themes').trigger('click');
+  assert.deepEqual(list.children.map(row => row.getAttribute('data-theme-id')), ['b', 'a', 'c']);
+  await list.children[1].lastElementChild.trigger('click');
+  assert.equal(elements.get('theme-details-dialog').open, true);
+  assert.equal(elements.get('theme-details-title').textContent, '人体');
 });

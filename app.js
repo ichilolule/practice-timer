@@ -21,7 +21,7 @@ let groups = [];
 let sessions = [];
 let selectedTaskId = null;
 let editingTaskId = null;
-let taskDrag = null;
+let itemDrag = null;
 let stepDrag = null;
 let taskPickerScrollTop = 0;
 let taskEditorSource = null;
@@ -200,7 +200,7 @@ function chooseTask(task, focusTimer = true) {
 }
 
 function renderTaskPicker() {
-  cancelTaskDrag();
+  cancelItemDrag();
   const list = $('task-picker-list');
   const scrollTop = $('active-task-panel').hidden ? taskPickerScrollTop : list.scrollTop;
   taskPickerScrollTop = scrollTop;
@@ -223,14 +223,14 @@ function renderTaskPicker() {
     item.className = 'task-pick-row';
     item.setAttribute('data-task-id', task.id);
     choose.title = task.title;
-    item.append(choose, taskDragHandle(task, item, 'task-picker-list'));
+    item.append(choose, itemDragHandle(task, item, 'task-picker-list'));
     list.append(item);
   }
   list.scrollTop = scrollTop;
 }
 
 function switchView(name) {
-  cancelTaskDrag();
+  cancelItemDrag();
   cancelStepDrag();
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) $(`${view}-view`).hidden = view !== name;
   for (const view of ['timer', 'tasks', 'growth', 'themes', 'settings']) {
@@ -552,7 +552,7 @@ function taskRow(task, completed) {
   item.append(checkLabel, title);
   if (!completed) {
     item.setAttribute('data-task-id', task.id);
-    item.append(taskDragHandle(task, item, 'task-list'));
+    item.append(itemDragHandle(task, item, 'task-list'));
   }
   return item;
 }
@@ -572,10 +572,10 @@ function moveTask(id, targetId, after, listId) {
   $('task-status').textContent = `Reordered “${task.title}”.`;
 }
 
-function cancelTaskDrag() {
-  const drag = taskDrag;
+function cancelItemDrag() {
+  const drag = itemDrag;
   if (!drag) return;
-  taskDrag = null;
+  itemDrag = null;
   globalThis.cancelAnimationFrame?.(drag.frame);
   drag.row.classList.toggle('task-dragging', false);
   drag.target?.classList.toggle('task-drop-before', false);
@@ -583,10 +583,10 @@ function cancelTaskDrag() {
   if (drag.handle.hasPointerCapture?.(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
 }
 
-function updateTaskDrop(drag) {
+function updateItemDrop(drag) {
   drag.target?.classList.toggle('task-drop-before', false);
   drag.target?.classList.toggle('task-drop-after', false);
-  const target = document.elementFromPoint(drag.x, drag.y)?.closest('[data-task-id]');
+  const target = document.elementFromPoint(drag.x, drag.y)?.closest(`[${drag.attribute}]`);
   drag.target = target?.parentElement === drag.list && target !== drag.row ? target : null;
   if (!drag.target) return;
   const bounds = drag.target.getBoundingClientRect();
@@ -594,7 +594,8 @@ function updateTaskDrop(drag) {
   drag.target.classList.toggle(drag.after ? 'task-drop-after' : 'task-drop-before', true);
 }
 
-function taskDragHandle(task, row, listId) {
+function itemDragHandle(task, row, listId, { attribute = 'data-task-id',
+  items = () => tasks.filter(item => item.completedAt == null), move = moveTask } = {}) {
   const handle = document.createElement('button');
   handle.type = 'button';
   handle.id = `${listId}-drag-${task.id}`;
@@ -605,20 +606,20 @@ function taskDragHandle(task, row, listId) {
   handle.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     event.preventDefault();
-    const active = tasks.filter((item) => item.completedAt == null);
+    const active = items();
     const direction = event.key === 'ArrowUp' ? -1 : 1;
     const target = active[active.indexOf(task) + direction];
-    if (target) moveTask(task.id, target.id, direction > 0, listId);
+    if (target) move(task.id, target.id, direction > 0, listId);
   });
   handle.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || event.isPrimary === false) return;
-    cancelTaskDrag();
-    taskDrag = { handle, row, list: $(listId), id: task.id, pointerId: event.pointerId,
+    cancelItemDrag();
+    itemDrag = { handle, row, list: $(listId), id: task.id, attribute, pointerId: event.pointerId,
       startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, active: false };
     handle.setPointerCapture(event.pointerId);
   });
   handle.addEventListener('pointermove', (event) => {
-    const drag = taskDrag;
+    const drag = itemDrag;
     if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
     drag.x = event.clientX;
     drag.y = event.clientY;
@@ -628,39 +629,42 @@ function taskDragHandle(task, row, listId) {
       drag.active = true;
       row.classList.toggle('task-dragging', true);
       const scroll = () => {
-        if (taskDrag !== drag) return;
+        if (itemDrag !== drag) return;
         const bounds = drag.list.getBoundingClientRect();
-        if (drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top && drag.y <= bounds.bottom) {
+        if (listId === 'group-list') {
+          if (drag.y < 80) window.scrollBy?.(0, -12);
+          else if (drag.y > window.innerHeight - 160) window.scrollBy?.(0, 12);
+        } else if (drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top && drag.y <= bounds.bottom) {
           if (drag.y < bounds.top + 32) drag.list.scrollTop -= 12;
           else if (drag.y > bounds.bottom - 32) drag.list.scrollTop += 12;
         }
-        updateTaskDrop(drag);
+        updateItemDrop(drag);
         drag.frame = globalThis.requestAnimationFrame?.(scroll);
       };
       drag.frame = globalThis.requestAnimationFrame?.(scroll);
     }
-    updateTaskDrop(drag);
+    updateItemDrop(drag);
   });
   handle.addEventListener('pointerup', (event) => {
-    const drag = taskDrag;
+    const drag = itemDrag;
     if (!drag || drag.handle !== handle || event.pointerId !== drag.pointerId) return;
     if (drag.active) {
       drag.x = event.clientX;
       drag.y = event.clientY;
-      updateTaskDrop(drag);
+      updateItemDrop(drag);
     }
-    const targetId = drag.active ? drag.target?.getAttribute('data-task-id') : null;
-    cancelTaskDrag();
-    if (targetId) moveTask(drag.id, targetId, drag.after, listId);
+    const targetId = drag.active ? drag.target?.getAttribute(attribute) : null;
+    cancelItemDrag();
+    if (targetId) move(drag.id, targetId, drag.after, listId);
   });
   for (const type of ['pointercancel', 'lostpointercapture']) handle.addEventListener(type, () => {
-    if (taskDrag?.handle === handle) cancelTaskDrag();
+    if (itemDrag?.handle === handle) cancelItemDrag();
   });
   return handle;
 }
 
 function renderTasks() {
-  cancelTaskDrag();
+  cancelItemDrag();
   const active = tasks.filter((task) => task.completedAt == null);
   const completed = tasks.filter((task) => task.completedAt != null)
     .sort((a, b) => b.completedAt - a.completedAt);
@@ -958,36 +962,63 @@ function themeCardId(id) {
   return id === UNASSIGNED_THEME ? 'theme-unassigned-card' : `theme-card-${id}`;
 }
 
+function moveTheme(id, targetId, after, listId) {
+  if (id === targetId) return;
+  const group = groups.find(item => item.id === id);
+  const target = groups.find(item => item.id === targetId);
+  if (!group || !target) return;
+  groups.splice(groups.indexOf(group), 1);
+  groups.splice(groups.indexOf(target) + Number(after), 0, group);
+  persist();
+  renderThemes();
+  document.getElementById(`${listId}-drag-${id}`)?.focus({ preventScroll: true });
+  $('growth-status').textContent = `Reordered “${group.title}”.`;
+}
+
 function themeCard(id, title, ms, scale) {
+  const row = document.createElement('article');
+  row.className = 'theme-row';
   const card = document.createElement('button');
   card.type = 'button';
   card.id = themeCardId(id);
   card.className = 'theme-card';
-  card.setAttribute('data-theme-id', id === UNASSIGNED_THEME ? '' : id);
   card.setAttribute('aria-haspopup', 'dialog');
   card.setAttribute('aria-label', `Open ${title}: ${durationText(ms)}`);
   const name = document.createElement('span');
   name.className = 'theme-card-title';
   name.textContent = title;
+  const amount = document.createElement('span');
+  amount.className = 'theme-card-amount';
+  amount.textContent = durationText(ms);
   const chevron = document.createElement('span');
   chevron.className = 'theme-chevron';
   chevron.textContent = '›';
   chevron.setAttribute('aria-hidden', 'true');
-  name.append(chevron);
+  const heading = document.createElement('span');
+  heading.className = 'theme-card-heading';
+  heading.append(name, amount, chevron);
   const chart = themeBar('', ms, scale);
   chart.className += ' theme-card-chart';
-  // カードの見出しと重複する空の名前は表示しない。
-  chart.children[0].children[0].hidden = true;
-  card.append(name, chart);
+  // 時間は見出しにまとめ、2行目はバーだけを表示する。
+  chart.children[0].hidden = true;
+  card.append(heading, chart);
   card.addEventListener('click', () => {
     activeThemeId = id;
     renderThemeDetails();
     $('theme-details-dialog').showModal();
   });
-  return card;
+  if (id !== UNASSIGNED_THEME) {
+    row.setAttribute('data-theme-id', id);
+    row.append(itemDragHandle(groups.find(group => group.id === id), row, 'group-list', {
+      attribute: 'data-theme-id', items: () => groups, move: moveTheme,
+    }));
+  }
+  row.append(card);
+  return row;
 }
 
 function renderThemes() {
+  cancelItemDrag();
   const all = themePeriodKind === 'all';
   const { summary, bounds } = themeSelection();
   $('theme-period-label').textContent = all ? 'All time' : periodLabel(bounds, themePeriodKind);
