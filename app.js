@@ -6,7 +6,7 @@ const { targetLabel, summarize, clearTargets, periodBounds, workInRange, periodB
 
 const STORAGE_KEY = 'practice-timer-v1';
 const BACKUP_FORMAT = 'practice-timer-beta';
-const { EVENTS: SOUND_EVENTS, BUILT_INS, validateSound, synthesize } = globalThis.PracticeSounds;
+const { EVENTS: SOUND_EVENTS, BUILT_INS, FALLBACK_PATTERNS, validateSound, synthesize } = globalThis.PracticeSounds;
 const DEFAULT_DAY_START = 5 * 60;
 const desktop = globalThis.practiceDesktop;
 // 保存値の尺度は旧版のままにして、画面の1%を従来の5%分に対応させる。
@@ -1380,7 +1380,7 @@ async function playSound(event, isCurrent = () => true) {
   }
   if (audioContext?.state !== 'running' && !await prepareAudio()) throw new Error('Could not play sound.');
   if (!isCurrent()) return 0;
-  return synthesize(audioContext, id.startsWith('mac:') ? `electronic-${event}` : id, volume);
+  return synthesize(audioContext, id.startsWith('mac:') ? `electronic-${FALLBACK_PATTERNS[event] || event}` : id, volume);
 }
 
 function queueSound(event, isCurrent) {
@@ -1394,7 +1394,8 @@ function queueSound(event, isCurrent) {
 function renderSoundSettings() {
   const percent = soundSettings.volume / SOUND_VOLUME_SCALE;
   $('sound-volume').value = String(percent);
-  $('sound-volume').style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${percent}%, var(--color-track) ${percent}%)`;
+  const filled = percent / 2;
+  $('sound-volume').style.backgroundImage = `linear-gradient(to right, var(--color-primary) ${filled}%, var(--color-track) ${filled}%)`;
   $('sound-volume-value').textContent = soundSettings.volume === 0 ? '0% (muted)' : `${percent}%`;
   $('sound-volume').setAttribute('aria-valuetext', $('sound-volume-value').textContent);
   let unavailable = false;
@@ -1457,12 +1458,17 @@ function notifyPhase(phase) {
   }
 }
 
-function handleEvent(event) {
+function handleEvent(event, playPhaseSound = true) {
   if (!event) return;
   if (event.kind === 'interrupted') {
     $('status').textContent = 'Paused after a long interruption.';
   } else {
     notifyPhase(event.phase);
+    if (playPhaseSound) {
+      const phaseRun = run;
+      const row = run.row;
+      void queueSound(event.phase, () => run === phaseRun && run.status === 'running' && run.row === row);
+    }
   }
   persist();
 }
@@ -1601,6 +1607,7 @@ function toggleTimer() {
   if (!run) {
     try { normalizeSteps(steps); }
     catch { showSettings(); return; }
+    void prepareAudio();
     run = createRun(steps, totalWorkMs, Date.now());
     run.recordGroupId = newId();
     const startedRun = run;
@@ -1608,9 +1615,10 @@ function toggleTimer() {
     soundEvent = 'start';
     isCurrent = () => run === startedRun && run.status === 'running' && run.row === 0 && !run.looping;
   } else if (run.status === 'running') {
-    handleEvent(pauseRun(run, Date.now()));
+    handleEvent(pauseRun(run, Date.now()), false);
     soundEvent = 'pause';
   } else {
+    void prepareAudio();
     resumeRun(run, Date.now());
     soundEvent = 'resume';
   }
@@ -1624,7 +1632,7 @@ $('main-action').addEventListener('click', toggleTimer);
 function skipTimer() {
   if (!run) return;
   const event = skipPhase(run, Date.now());
-  handleEvent(event);
+  handleEvent(event, false);
   const saved = persist();
   renderTimer();
   if (saved && event?.kind === 'phase') return queueSound('skip');
@@ -1776,11 +1784,11 @@ if (desktop) {
     else if (command.type === 'export') void downloadBackup();
     else if (command.type === 'suspend') {
       if (run?.status === 'running') {
-        handleEvent(pauseRun(run, Math.max(run.lastTick, Math.min(Date.now(), command.at))));
+        handleEvent(pauseRun(run, Math.max(run.lastTick, Math.min(Date.now(), command.at))), false);
         persist(); renderTimer();
       }
     } else if (command.type === 'quit') {
-      if (run?.status === 'running') handleEvent(pauseRun(run, Date.now()));
+      if (run?.status === 'running') handleEvent(pauseRun(run, Date.now()), false);
       const saved = !localDataReadable || persist(); renderTimer(); desktop.finishQuit(saved);
     }
   });

@@ -1,16 +1,18 @@
 (() => {
 'use strict';
 
-const EVENTS = Object.freeze(['start', 'pause', 'resume', 'skip', 'end']);
+const PATTERNS = Object.freeze(['start', 'pause', 'resume', 'skip', 'end']);
+const EVENTS = Object.freeze([...PATTERNS, 'work', 'rest']);
+const FALLBACK_PATTERNS = Object.freeze({ work: 'start', rest: 'pause' });
 const EVENT_LABELS = Object.freeze({ start: 'Start', pause: 'Pause', resume: 'Resume', skip: 'Skip', end: 'End' });
 const TIMBRES = Object.freeze({ wood: 'Wood', bell: 'Bell', water: 'Water', electronic: 'Electronic' });
 // An ID always describes one sound, regardless of which operation it is assigned to.
 const BUILT_INS = Object.freeze(Object.fromEntries([
-  ...Object.entries(TIMBRES).flatMap(([id, label]) => EVENTS.map(event => [`${id}-${event}`, `${label} (${EVENT_LABELS[event]})`])),
+  ...Object.entries(TIMBRES).flatMap(([id, label]) => PATTERNS.map(event => [`${id}-${event}`, `${label} (${EVENT_LABELS[event]})`])),
   ['none', 'None'],
 ]));
 const DEFAULT_ASSIGNMENTS = Object.freeze({ start: 'wood-start', pause: 'wood-pause', resume: 'wood-resume',
-  skip: 'electronic-skip', end: 'bell-end' });
+  skip: 'electronic-skip', end: 'bell-end', work: 'bell-start', rest: 'bell-end' });
 const DEFAULT_SOUND = Object.freeze({ volume: 50, assignments: DEFAULT_ASSIGNMENTS });
 const MAC_SOUND = /^mac:[^/\\\u0000-\u001f]{1,100}\.(?:aiff?|wav|caf|m4a|mp3)$/i;
 
@@ -18,7 +20,7 @@ function validateSound(raw) {
   if (raw == null) raw = DEFAULT_SOUND;
   // Earlier versions stored a separate operation volume and event-dependent timbre IDs.
   const volume = raw.operationVolume ?? raw.volume;
-  if (!Number.isInteger(volume) || volume < 0 || volume > 500 ||
+  if (!Number.isInteger(volume) || volume < 0 || volume > 1000 ||
       (raw.assignments !== undefined && (!raw.assignments || typeof raw.assignments !== 'object' || Array.isArray(raw.assignments)))) {
     throw new Error('Invalid sound settings.');
   }
@@ -26,7 +28,7 @@ function validateSound(raw) {
   for (const event of EVENTS) {
     let id = raw.assignments?.[event] ?? DEFAULT_ASSIGNMENTS[event];
     if (typeof id !== 'string') throw new Error('Invalid sound settings.');
-    if (Object.hasOwn(TIMBRES, id)) id = `${id}-${event}`;
+    if (Object.hasOwn(TIMBRES, id)) id = `${id}-${FALLBACK_PATTERNS[event] || event}`;
     if (!Object.hasOwn(BUILT_INS, id) && !MAC_SOUND.test(id)) throw new Error('Invalid sound settings.');
     assignments[event] = id;
   }
@@ -66,7 +68,7 @@ function synthesize(context, id, volume) {
   return (frequencies.length - 1) * spacing + decay + 0.01 / speed;
 }
 
-const api = { EVENTS, BUILT_INS, DEFAULT_SOUND, validateSound, synthesize };
+const api = { EVENTS, BUILT_INS, DEFAULT_SOUND, FALLBACK_PATTERNS, validateSound, synthesize };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else globalThis.PracticeSounds = api;
 })();

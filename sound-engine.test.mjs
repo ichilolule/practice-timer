@@ -9,14 +9,14 @@ test('old operation settings migrate to fixed sound IDs; new settings round-trip
   assert.equal(settings.volume, 99);
   assert.equal('pitch' in settings, false);
   settings.volume = 0;
-  settings.assignments = { start: 'wood-start', pause: 'mac:Glass.aiff', resume: 'electronic-resume', skip: 'water-skip', end: 'none' };
+  settings.assignments = { start: 'wood-start', pause: 'mac:Glass.aiff', resume: 'electronic-resume', skip: 'water-skip', end: 'none', work: 'bell-start', rest: 'bell-end' };
   assert.deepEqual(validateSound(JSON.parse(JSON.stringify(settings))), settings);
   assert.equal(validateSound({ volume: 300, operationVolume: 25, pitch: 12, assignments: { start: 'wood' } }).volume, 25);
   assert.equal(validateSound({ volume: 300, operationVolume: 25, assignments: { start: 'wood' } }).assignments.start, 'wood-start');
 });
 
 test('bad volumes, unknown sound IDs and paths cannot enter an imported backup', () => {
-  for (const patch of [{ volume: 501 }, { operationVolume: -1 }, { operationVolume: 1.5 },
+  for (const patch of [{ volume: 1001 }, { operationVolume: -1 }, { operationVolume: 1.5 },
     { assignments: [] }, { assignments: null }, { assignments: { start: 'unknown' } },
     { assignments: { start: 'mac:../../secret.aiff' } }, { assignments: { start: '__proto__' } },
     { assignments: { end: 'mac:Glass.aiff\n' } }, { assignments: { start: ['wood'] } }]) {

@@ -18,7 +18,7 @@ function createNativeSounds({ directory = SOUND_DIRECTORY, launch = spawn } = {}
     list: () => files.map(filename => ({ id: `mac:${filename}`, label: path.parse(filename).name })),
     stop,
     play(id, volume) {
-      if (!allowed.has(id) || !Number.isFinite(volume) || volume < 0 || volume > 100) throw new Error('Invalid Mac sound.');
+      if (!allowed.has(id) || !Number.isFinite(volume) || volume < 0 || volume > 200) throw new Error('Invalid Mac sound.');
       stop();
       if (volume === 0) return Promise.resolve();
       return new Promise((resolve, reject) => {

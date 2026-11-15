@@ -34,7 +34,7 @@ class Element {
   hasPointerCapture() { return false; }
   getBoundingClientRect() { return this.bounds || { top: 0, bottom: 400, left: 0, right: 300, height: 400 }; }
   closest(selector) {
-    const attribute = selector === '[data-step-index]' ? 'data-step-index' : 'data-task-id';
+    const attribute = selector.slice(1, -1);
     return this.getAttribute(attribute) != null ? this : this.parentElement?.closest(selector);
   }
   get lastElementChild() { return this.children.at(-1); }
@@ -62,6 +62,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
   let now = initialNow;
   let exportedBlob = null;
   const timeouts = [];
+  const intervals = [];
   const viewport = { AudioContext, scrollX: 0, scrollY: 0, scrollTo({ left, top }) { this.scrollX = left; this.scrollY = top; } };
   const FakeDate = class extends Date { static now() { return now; } };
   const context = vm.createContext({
@@ -72,7 +73,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     },
     window: viewport,
     addEventListener() {},
-    setInterval() {},
+    setInterval(callback) { intervals.push(callback); },
     setTimeout(callback, delay = 0) { timeouts.push({ callback, at: now + delay }); },
     confirm: () => true,
     prompt: () => null,
@@ -85,6 +86,7 @@ function mount(storage = new Map(), AudioContext = class { constructor() { throw
     vm.runInContext(readFileSync(new URL(`./${file}`, import.meta.url), 'utf8'), context);
   }
   return { elements, storage, viewport, hit(element) { hitElement = element; }, advance(ms) { now += ms; },
+    tick() { for (const callback of intervals) callback(); },
     flushTimeouts() { for (const timer of timeouts.splice(0)) timer.callback(); },
     flushDueTimeouts() { for (const timer of timeouts.filter((timer) => timer.at <= now)) { timeouts.splice(timeouts.indexOf(timer), 1); timer.callback(); } },
     get exportedBlob() { return exportedBlob; } };
@@ -201,13 +203,14 @@ test('ローカルデータが壊れている間は直接保存を止め、有�
   assert.match(app.elements.get('backup-status').textContent, /JSON imported/);
 });
 
-test('共通音量と固定名の音を保存・試聴し、Alerts・Pitch・作業休憩音は置かない', async () => {
+test('共通音量と固定名の音を保存・試聴し、作業・休憩開始音も個別に選べる', async () => {
   const audio = recordAudio();
   const app = mount(new Map(), audio.AudioContext);
   const { elements } = app;
   await elements.get('settings-toggle').trigger('click');
   assert.equal(elements.has('sound-pitch'), false);
-  assert.equal(elements.has('sound-work'), false);
+  assert.equal(elements.has('sound-work'), true);
+  assert.equal(elements.has('sound-rest'), true);
   assert.equal(elements.has('shortcut-sounds'), false);
   elements.get('sound-volume').value = '10';
   await elements.get('sound-volume').trigger('change');
@@ -231,7 +234,7 @@ test('共通音量と固定名の音を保存・試聴し、Alerts・Pitch・作
   assert.equal(backup.sound.volume, 50);
   assert.equal('pitch' in backup.sound, false);
   assert.equal('operationVolume' in backup.sound, false);
-  backup.sound.volume = 501;
+  backup.sound.volume = 1001;
   elements.get('import-file').files = [{ size: 1000, text: async () => JSON.stringify(backup) }];
   const saved = app.storage.get('practice-timer-v1');
   await elements.get('import-file').trigger('change');
@@ -267,17 +270,71 @@ test('共通音量0でボタン操作・試聴を消音し、音が使えなく�
   assert.equal(audio.gains[0][1].value, 0.08);
 });
 
-test('自動で作業から休憩へ移るときは旧通知音を鳴らさない', async () => {
+test('00:00の自動切替は作業・休憩の割り当て音を1回ずつ鳴らし、スキップ音と区別する', async () => {
   const audio = recordAudio();
   const app = mount(new Map([['practice-timer-v1', JSON.stringify({
-    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 1 }], totalWorkMs: 0,
+    format: 'practice-timer-beta', version: 1, groups: [], tasks: [], sessions: [],
+    steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }], totalWorkMs: 0,
+    sound: { volume: 50, assignments: { start: 'none', work: 'electronic-start', rest: 'electronic-end', skip: 'electronic-pause' } },
   })]]), audio.AudioContext);
   await app.elements.get('main-action').trigger('click');
-  const before = audio.notes.length;
-  app.advance(6001);
-  await app.elements.get('backup-save').trigger('click');
-  assert.equal(JSON.parse(await app.exportedBlob.text()).run.phase, 'rest');
-  assert.equal(audio.notes.length, before);
+  assert.equal(audio.notes.length, 0);
+  app.advance(6000);
+  app.tick();
+  await Promise.resolve();
+  assert.equal(app.elements.get('phase-name').getAttribute('aria-label'), 'Break · running');
+  assert.deepEqual(audio.notes.map(note => note.frequency.value), [880, 660, 440]);
+  app.tick();
+  assert.equal(audio.notes.length, 3);
+  app.advance(6000);
+  app.tick();
+  await Promise.resolve();
+  assert.equal(app.elements.get('phase-name').getAttribute('aria-label'), 'Work · running');
+  assert.deepEqual(audio.notes.slice(3).map(note => note.frequency.value), [660, 880]);
+  await app.elements.get('skip').trigger('click');
+  assert.deepEqual(audio.notes.slice(5).map(note => note.frequency.value), [440]);
+  await app.elements.get('main-action').trigger('click');
+  const pausedCount = audio.notes.length;
+  app.advance(120_000);
+  app.tick();
+  assert.equal(audio.notes.length, pausedCount);
+});
+
+test('200%の音量と切替音は保存・復元でき、Web上のMac切替音は電子音に代替する', async () => {
+  const audio = recordAudio();
+  const app = mount(new Map(), audio.AudioContext);
+  const { elements } = app;
+  elements.get('sound-volume').value = '200';
+  await elements.get('sound-volume').trigger('change');
+  elements.get('sound-rest').value = 'mac:Glass.aiff';
+  await elements.get('sound-rest').trigger('change');
+  await elements.get('preview-rest').trigger('click');
+  assert.deepEqual(audio.notes.map(note => note.frequency.value), [440]);
+  assert.equal(audio.gains[0][1].value, 1.6);
+  assert.equal(elements.get('sound-volume-value').textContent, '200%');
+  assert.match(elements.get('sound-volume').style.backgroundImage, /100%/);
+  assert.equal(JSON.parse(app.storage.get('practice-timer-v1')).sound.volume, 1000);
+  const restored = mount(app.storage).elements;
+  await restored.get('settings-toggle').trigger('click');
+  assert.equal(restored.get('sound-rest').value, 'mac:Glass.aiff');
+  assert.equal(restored.get('sound-volume').value, '200');
+  assert.match(restored.get('sound-availability').textContent, /unavailable/);
+});
+
+test('中断や切替音のNone・共通消音では自動切替音を鳴らさない', async () => {
+  for (const [volume, rest, delay] of [[50, 'none', 6000], [0, 'bell-end', 6000], [50, 'bell-end', 120_000]]) {
+    const audio = recordAudio();
+    const app = mount(new Map([['practice-timer-v1', JSON.stringify({
+      format: 'practice-timer-beta', version: 1, groups: [], tasks: [], sessions: [], totalWorkMs: 0,
+      steps: [{ type: 'work', minutes: 0.1 }, { type: 'rest', minutes: 0.1 }],
+      sound: { volume, assignments: { start: 'none', rest } },
+    })]]), audio.AudioContext);
+    await app.elements.get('main-action').trigger('click');
+    app.advance(delay);
+    app.tick();
+    await Promise.resolve();
+    assert.equal(audio.notes.length, 0);
+  }
 });
 
 test('旧バックアップは既定の操作音を使い、試聴できない場合はエラーを表示する', async () => {

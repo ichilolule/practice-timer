@@ -292,14 +292,14 @@ test('fixed sound choices, button/shortcut parity, skip keys and coffee tray ico
   await command(app, 'settings');
   await page.waitForSelector('#sound-start:visible');
   await page.waitForFunction(() => document.querySelector('#sound-start optgroup[label="Mac sounds"]'));
-  for (const id of ['sound-work', 'sound-rest', 'sound-pitch', 'sound-operation-volume', 'shortcut-sounds']) {
+  for (const id of ['sound-pitch', 'sound-operation-volume', 'shortcut-sounds']) {
     assert.equal(await page.locator(`#${id}`).count(), 0);
   }
   const sounds = await page.evaluate(() => practiceDesktop.sounds());
   const installed = (await readdir('/System/Library/Sounds')).filter(name => /\.(aiff?|wav|caf|m4a|mp3)$/i.test(name)).sort();
   assert.deepEqual(sounds.map(sound => sound.id), installed.map(name => `mac:${name}`));
   const builtIns = await page.evaluate(() => Object.keys(PracticeSounds.BUILT_INS));
-  for (const event of ['start', 'pause', 'resume', 'skip', 'end']) {
+  for (const event of ['start', 'pause', 'resume', 'skip', 'end', 'work', 'rest']) {
     assert.equal(await page.locator(`#sound-${event} option`).count(), sounds.length + builtIns.length);
     const labels = await page.locator(`#sound-${event} option`).allTextContents();
     assert.equal(new Set(labels).size, labels.length);
