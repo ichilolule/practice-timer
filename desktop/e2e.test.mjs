@@ -680,7 +680,7 @@ test('Latte Loop title bar, palette, left drag handles and end-session task regi
   assert.equal(titlebar.drag, 'drag');
   assert.equal(await page.locator('#active-task-panel').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(206, 227, 236)');
   assert.equal(await page.locator('#nav-timer').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(206, 227, 236)');
-  assert.equal(await page.locator('#timer-ring-remaining').evaluate(element => getComputedStyle(element).stroke), 'rgb(206, 227, 236)');
+  assert.equal(await page.locator('#timer-ring-remaining').evaluate(element => getComputedStyle(element).stroke), 'rgb(121, 167, 197)');
   async function checkHandle(selector) {
     const row = page.locator(selector).first();
     assert.equal(await row.locator(':scope > :first-child').getAttribute('class'), 'task-drag-handle');
@@ -693,6 +693,9 @@ test('Latte Loop title bar, palette, left drag handles and end-session task regi
   await checkHandle('#task-list .task-row');
   await page.locator('#nav-themes').click();
   await checkHandle('#group-list .theme-row');
+  assert.equal(await page.locator('#group-list .theme-bar-fill').first().evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(121, 167, 197)');
+  await page.locator('#nav-growth').click();
+  assert.equal(await page.locator('.period-bar-fill').first().evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(121, 167, 197)');
   await page.locator('#settings-toggle').click();
   const routine = page.locator('#step-list .step-row').first();
   assert.equal(await routine.locator(':scope > :first-child').getAttribute('class'), 'step-drag-handle');
